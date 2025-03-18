@@ -2,12 +2,12 @@
 
 A powerful media display application that shows random images, GIFs, and videos from selected zip files with advanced customization options, multi-monitor support, and interactive animations.
 
-## ⚠️ Content Warning
-This application is designed for displaying EXPLICIT ADULT CONTENT. Users must:
-- Be 18+ or of legal age in their jurisdiction
-- Be in a completely private setting ( or not :wink:)
-- Accept full responsibility for viewing content
-- Understand that viewed content cannot be unseen
+> [!WARNING]
+>This application is designed for displaying EXPLICIT ADULT CONTENT. Users must:
+>- Be 18+ or of legal age in their jurisdiction
+>- Be in a completely private setting ( or not :wink:)
+>- Accept full responsibility for viewing content
+>- Understand that viewed content cannot be unseen
 
 ## 🔑 Key Features
 
@@ -56,7 +56,7 @@ This application is designed for displaying EXPLICIT ADULT CONTENT. Users must:
 ## 🚀 Getting Started
 
 1. Run `start.bat` to initialize the application
-2. Accept the content warning
+2. If needed re-run `start.bat` till the Config UI pops up
 3. Add model ZIP files to the `models` folder
 4. Select desired models in the control panel
 5. Choose which monitors to use for display
@@ -129,9 +129,10 @@ your-model-pack.zip
 ## 🚫 Troubleshooting
 
 ### Application Won't Start
-1. Run start.bat as administrator
-2. Check logs in the assets/logs folder
-3. Ensure Python is installed correctly
+1. Re-run start.bat
+2. Run start.bat as administrator
+3. Check logs in the assets/logs folder
+4. Ensure Python is installed correctly
 
 ### Display Issues
 1. Reduce maximum popup count
@@ -154,4 +155,3 @@ your-model-pack.zip
 - Close other resource-intensive applications
 - Use the panic key if you need to quickly hide content
 - For multi-monitor setups, ensure all monitors are detected in Windows display settings
-- Experiment with bounce animation settings for the most enjoyable experience
