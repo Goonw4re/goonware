@@ -84,7 +84,7 @@ All media files must be contained within ZIP archives in the models folder.
 
 ## 📁 File Management
 ### Find Some online
-1. This application is compatible with all [Edgeware]([https://pages.github.com/](https://github.com/PetitTournesol/Edgeware)) and [Edgeware++]([https://pages.github.com/](https://github.com/araten10/EdgewarePlusPlus)) packs
+1. This application is compatible with all [Edgeware](https://github.com/PetitTournesol/Edgeware) and [Edgeware++](https://github.com/araten10/EdgewarePlusPlus) packs
 
 ### Adding Content
 1. Create a ZIP file containing your media
