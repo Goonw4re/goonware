@@ -1,102 +1,81 @@
-# GOONWARE
+<div align="center">
+  <img src="assets/icon.png" alt="Goonware Logo" width="200">
+  <h3>Advanced Media Viewer (18+)</h3>
+</div>
 
-A powerful media display application that shows random images, GIFs, and videos from selected zip files with advanced customization options, multi-monitor support, and interactive animations.
-
-> [!WARNING]
->This application is designed for displaying EXPLICIT ADULT CONTENT. Users must:
->- Be 18+ or of legal age in their jurisdiction
->- Be in a completely private setting ( or not :wink:)
->- Accept full responsibility for viewing content
->- Understand that viewed content cannot be unseen
+A powerful application for viewing and managing GMODEL files with comprehensive media playback capabilities, file management, and customizable display settings.
 
 ## 🔑 Key Features
 
-### Advanced Media Display
-- Shows images, animated GIFs, and videos across multiple monitors simultaneously
-- Intelligently distributes content across all your screens
-- Maintains proper aspect ratios and scaling for all media types
-- Supports transparent PNGs and high-quality animated GIFs
-- Plays videos with audio and proper duration handling
+### GMODEL File Viewer
+- View images, GIFs, videos, audio, and text files within GMODEL archives
+- Interactive file browser with intuitive navigation
+- Detailed file information and statistics
+- File type preview with media controls
+- Visual content breakdown with data visualization
 
-### Multi-Monitor Support
-- Full support for multiple monitor setups
-- Select which monitors to use for display
-- Configure each monitor independently
-- Keeps windows on their assigned monitor during animations
-- Respects monitor boundaries for proper display
+### Media Playback
+- Smooth video playback with player controls
+- Audio playback with volume control
+- High-quality image viewing with proper scaling
+- Text file viewing with syntax formatting
+- Support for all common media formats
 
-### Interactive Animations
-- Dynamic bounce animation that keeps windows within monitor boundaries
-- Configurable bounce probability (set percentage of windows that bounce)
-- Physics-based movement with realistic collision detection
-- Smooth animations optimized for performance
-- Windows maintain proper visibility during animations
+### File Management
+- Built-in converter to transform ZIP files to GMODEL format
+- Compress files to reduce storage needs
+- Delete files directly from archives
+- View detailed archive statistics
+- Sort and filter content by type
 
-### Customizable Display Controls
-- Precise display interval control (0.1s to 300s)
-- Adjustable maximum number of simultaneous popups (1-250)
-- Fine-grained popup probability control (1-100%)
-- Individual close buttons on each popup
-- Automatic cleanup of resources
+### Advanced Display
+- Multi-monitor support for content viewing
+- Custom dark-themed UI for comfortable viewing
+- Configurable display settings
+- Responsive layout that adjusts to window size
+- Content visualization with breakdown charts
 
-### Safety Features
-- Emergency panic button (customizable, default: ')
-- Instantly closes all windows when panic key is pressed
-- System tray icon for quick access and control
-- Warning dialog on startup
-- Private viewing mode (no taskbar entries)
+## 📋 Supported File Types
 
-### Modern User Interface
-- Sleek, dark-themed interface
-- Intuitive control panel with real-time feedback
-- Easy-to-use model selection and management
-- Drag-and-drop model file management
-- Always-on-top window option
+### Images
+- JPG, PNG, BMP, GIF (with animation support)
+- TIFF, WebP, and other common formats
+- Transparent images with alpha channel support
 
-## 🚀 Getting Started
+### Videos
+- MP4, AVI, MOV, MKV, WebM
+- Hardware-accelerated video decoding
+- Scrubbing and playback controls
 
-1. Run `start.bat` to initialize the application
-2. If needed re-run `start.bat` till the Config UI pops up
-3. Add model ZIP files to the `models` folder
-4. Select desired models in the control panel
-5. Choose which monitors to use for display
-6. Adjust display settings as needed
-7. Enable bounce animation if desired
-8. Click "Start" to begin display
+### Audio
+- MP3, WAV, OGG, FLAC
+- Volume control and position seeking
+- Visualization of audio files
 
-## ⚙️ Configuration
+### Text
+- TXT, JSON, XML, HTML, MD
+- Syntax highlighting for code files
+- UTF-8 and other encoding support
 
-### Display Settings
-- **Interval**: Time between popup displays (lower = more frequent popups)
-- **Max Popups**: Maximum number of simultaneous windows
-- **Probability**: Chance of showing a popup each interval
-- **Panic Key**: Customize your emergency stop key
-- **Bounce**: Enable/disable popup bounce animation
-- **Monitors**: Select which monitors to use for display
+## 🔧 Technical Features
 
-### Media Types
-The application supports:
-- **Images**: JPG, PNG, BMP (prioritized for display)
-- **GIFs**: Animated GIFs with proper frame timing
-- **Videos**: MP4, AVI, MOV, WMV, FLV (with audio)
+### Modern UI
+- Custom title bar with window controls
+- Resizable panels with intuitive dividers
+- Dark theme with high contrast for readability
+- Content-aware media player
+- Clean file browser with type-specific icons
 
-All media files must be contained within ZIP archives in the models folder.
+### Performance
+- Efficient memory management
+- On-demand loading of media content
+- Temporary file cleanup
+- Hardware acceleration when available
+- Minimal resource usage
 
-## 📁 File Management
-### Find Some online
-1. This application is compatible with all [Edgeware](https://github.com/PetitTournesol/Edgeware) and [Edgeware++](https://github.com/araten10/EdgewarePlusPlus) packs
-
-### Adding Content
-1. Create a ZIP file containing your media
-2. Organize content in folders (optional but recommended):
-   - `img/` for images
-   - `vid/` for videos
-3. Place the ZIP file in the `models` folder
-4. Select it in the application
-
-### Recommended ZIP Structure
+### File Structure
 ```
-your-model-pack.zip
+your-model-pack.gmodel (or .zip)
 ├── img/
 │   ├── image1.jpg
 │   ├── image2.png
@@ -106,54 +85,50 @@ your-model-pack.zip
     └── video2.mp4
 ```
 
-## ⌨️ Keyboard Shortcuts
+## 🚀 Getting Started
 
-- **Panic Key** (default: '): Emergency stop all displays and shows/hides the config
-- **ESC**: Hide control panel
-- **System Tray**: Click to toggle UI visibility
+1. Launch the application using `start.bat`
+2. Open a GMODEL file through the file menu or by drag-and-drop
+3. Browse files in the left panel
+4. Select a file to view its contents in the right panel
+5. Use the media controls for videos and audio
+6. Enjoy your content with our advanced viewing features
 
-## 🛠️ Technical Requirements
+## 📊 GMODEL Statistics
+
+The viewer provides detailed information about your GMODEL files:
+- File count and types breakdown
+- Compression ratio and space savings
+- Original vs. compressed size comparison
+- Visual representation of content distribution
+- Last modified and creation dates
+
+## 🛠️ System Requirements
 
 - Windows 10/11
-- Python 3.8+ (installed automatically)
+- Python 3.8+
 - 4GB RAM recommended
-- Graphics card with basic video acceleration
-- Multiple monitors for full experience (optional)
+- Graphics card with video acceleration support
+- 100MB available disk space
 
-## 🔒 Privacy & Security
+## 🔍 Troubleshooting
 
-- No data collection or transmission
-- All content stays local on your computer
-- No network access required
-- Private window mode
-- Secure cleanup on exit
+If you encounter issues:
+1. Check that all dependencies are installed
+2. Ensure your GMODEL files are properly formatted
+3. Verify that your media files are in supported formats
+4. Check the application logs for detailed error information
+5. Make sure your system meets the minimum requirements
 
-## 🚫 Troubleshooting
+## 💻 Development
 
-### Application Won't Start
-1. Re-run start.bat
-2. Run start.bat as administrator
-3. Check logs in the assets/logs folder
-4. Ensure Python is installed correctly
+The application is built with:
+- Python for core functionality
+- Tkinter for the user interface
+- OpenCV for video processing
+- Pygame for audio playback
+- PIL for image handling
 
-### Display Issues
-1. Reduce maximum popup count
-2. Increase display interval
-3. Disable bounce animation
-4. Check if your ZIP files contain valid media
-5. Verify monitor configuration
+---
 
-### Media Not Showing
-1. Verify ZIP file format is correct
-2. Check that media files are in supported formats
-3. Try extracting and re-zipping your content
-4. Look for errors in the application logs
-
-## 📝 Tips for Best Experience
-
-- Keep model ZIP files under 500MB for better performance
-- Use MP4 format for videos (most compatible)
-- Resize large images before adding to ZIP files
-- Close other resource-intensive applications
-- Use the panic key if you need to quickly hide content
-- For multi-monitor setups, ensure all monitors are detected in Windows display settings
+*GOONWARE - Enhancing your media viewing experience 18+*
