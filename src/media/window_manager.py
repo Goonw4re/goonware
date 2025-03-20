@@ -109,21 +109,21 @@ class WindowManager:
             
             if hasattr(self.display, 'bounce_enabled'):
                 bounce_enabled = self.display.bounce_enabled
-                bounce_chance = getattr(self.display, 'bounce_chance', 0.15 if bounce_enabled else 0.0)
+                bounce_chance = getattr(self.display, 'bounce_chance', 0.0)
             
-            print(f"DEBUG WINDOW_BOUNCE: Window added with bounce_enabled={bounce_enabled}, bounce_chance={bounce_chance:.2f}")
+            print(f"DEBUG WINDOW_BOUNCE: Window added with bounce_enabled={bounce_enabled}, bounce_chance={bounce_chance:.4f} ({bounce_chance*100:.1f}%)")
             
             if bounce_enabled:
-                # Determine if this window should bounce based on random chance (15%)
+                # Determine if this window should bounce based on the configured chance percentage
                 bounce_roll = random.random()
                 should_bounce = bounce_roll < bounce_chance
                 
-                print(f"DEBUG WINDOW_BOUNCE: Bounce roll: {bounce_roll:.3f}, threshold: {bounce_chance:.3f}, should_bounce: {should_bounce}")
+                print(f"DEBUG WINDOW_BOUNCE: Bounce roll: {bounce_roll:.4f}, threshold: {bounce_chance:.4f} ({bounce_chance*100:.1f}%), should_bounce: {should_bounce}")
                 
                 if should_bounce:
                     # Set initial velocity - higher values for more noticeable movement
-                    velocity_x = random.choice([-1, 1]) * random.randint(10, 20)
-                    velocity_y = random.choice([-1, 1]) * random.randint(10, 20)
+                    velocity_x = random.choice([-1, 1]) * random.randint(5, 12)
+                    velocity_y = random.choice([-1, 1]) * random.randint(5, 12)
                     
                     # Add to velocity tracking
                     self.window_velocities[window] = (velocity_x, velocity_y)
@@ -136,7 +136,7 @@ class WindowManager:
                         print(f"DEBUG WINDOW_BOUNCE: Starting animation thread for new bouncing window")
                         self.display.animation_manager.start_bounce_thread()
                 else:
-                    print(f"DEBUG WINDOW_BOUNCE: Window not selected for bouncing (roll: {bounce_roll:.3f})")
+                    print(f"DEBUG WINDOW_BOUNCE: Window not selected for bouncing (roll: {bounce_roll:.4f}, needed < {bounce_chance:.4f} [{bounce_chance*100:.1f}%])")
         
         # Remove oldest windows if we exceed the maximum
         self._enforce_window_limit()
@@ -256,46 +256,9 @@ class WindowManager:
                 pass
     
     def remove_after_delay(self, window):
-        """Schedule a window to be removed after a delay based on media type"""
-        import threading
-        
-        try:
-            # Determine appropriate delay based on media type
-            if window in self.video_windows:
-                # For videos, use a longer delay based on video duration if available
-                info = self.video_windows[window]
-                if 'cap' in info and info['cap'].isOpened():
-                    # Get video duration in seconds
-                    fps = info.get('fps', 30)
-                    if fps <= 0:
-                        fps = 30  # Default to 30fps if invalid
-                    
-                    frame_count = int(info['cap'].get(cv2.CAP_PROP_FRAME_COUNT))
-                    duration = frame_count / fps
-                    
-                    # Use video duration with a minimum of 10 seconds and maximum of 60 seconds
-                    delay = min(max(duration * 0.95, 10.0), 60.0)
-                    logger.info(f"Video window will be removed after {delay:.1f} seconds (duration: {duration:.1f}s)")
-                else:
-                    # Default video delay if duration can't be determined
-                    delay = random.uniform(15.0, 30.0)
-                    logger.info(f"Video window will be removed after {delay:.1f} seconds (default)")
-            elif window in self.gif_windows:
-                # For GIFs, use a medium delay
-                delay = random.uniform(10.0, 20.0)
-                logger.info(f"GIF window will be removed after {delay:.1f} seconds")
-            else:
-                # For images, use a shorter delay
-                delay = random.uniform(8.0, 15.0)
-                logger.info(f"Image window will be removed after {delay:.1f} seconds")
-            
-            # Schedule window removal with the calculated delay
-            timer = threading.Timer(delay, lambda: self.remove_window_safely(window))
-            timer.daemon = True
-            timer.start()
-            
-        except Exception as e:
-            logger.error(f"Error scheduling window removal: {e}\n{traceback.format_exc()}")
+        """No longer removes windows after delay - popups remain until replaced or manually closed"""
+        logger.info("Auto-closing disabled - window will remain until replaced or manually closed")
+        # No auto-close functionality - windows remain until manually closed or replaced
     
     def clear_windows(self):
         """Clear all windows using safe methods"""

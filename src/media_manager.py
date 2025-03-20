@@ -47,22 +47,54 @@ class MediaManager:
         logger.info(f"MediaManager initialized with models directory: {models_dir}")
     
     def _scan_available_zips(self):
-        """Scan for available zip files without loading them"""
+        """Scan for available zip and gmodel files without loading them"""
         try:
             # Clear existing zips
             self.available_zips.clear()
             
-            # Scan models directory for zip files
+            # First, collect all files with their extensions
+            all_model_files = {}
+            
             if os.path.exists(self.models_dir):
                 for filename in os.listdir(self.models_dir):
-                    if filename.lower().endswith('.zip'):
-                        zip_path = os.path.join(self.models_dir, filename)
-                        self.available_zips[filename] = zip_path
+                    # Only process .zip and .gmodel files
+                    if filename.lower().endswith(('.zip', '.gmodel')):
+                        # Get the base name without extension
+                        base_name = os.path.splitext(filename)[0]
+                        
+                        # Get file path
+                        file_path = os.path.join(self.models_dir, filename)
+                        
+                        # Add or update the file info
+                        if base_name not in all_model_files:
+                            all_model_files[base_name] = {
+                                'path': file_path,
+                                'filename': filename,
+                                'extension': os.path.splitext(filename)[1].lower()
+                            }
+                        else:
+                            # If both .zip and .gmodel exist, prefer .gmodel
+                            current_ext = all_model_files[base_name]['extension']
+                            new_ext = os.path.splitext(filename)[1].lower()
+                            
+                            # .gmodel takes precedence over .zip
+                            if new_ext == '.gmodel' and current_ext == '.zip':
+                                all_model_files[base_name] = {
+                                    'path': file_path,
+                                    'filename': filename,
+                                    'extension': new_ext
+                                }
             
-            logger.info(f"Found {len(self.available_zips)} zip files")
+            # Now build available_zips using only the preferred file for each base name
+            for file_info in all_model_files.values():
+                filename = file_info['filename']
+                file_path = file_info['path']
+                self.available_zips[filename] = file_path
+            
+            logger.info(f"Found {len(self.available_zips)} model files")
             
         except Exception as e:
-            logger.error(f"Error scanning available zips: {e}\n{traceback.format_exc()}")
+            logger.error(f"Error scanning available model files: {e}\n{traceback.format_exc()}")
     
     def load_config(self):
         """Load configuration from file"""
@@ -229,23 +261,23 @@ class MediaManager:
             return False
     
     def refresh_media_files(self):
-        """Refresh the list of available zip files"""
+        """Refresh the list of available model files (.zip and .gmodel)"""
         try:
             # Store current loaded zips
             current_loaded = self.loaded_zips.copy()
             
-            # Scan for available zips
+            # Scan for available model files
             self._scan_available_zips()
             
             # Filter loaded zips to only those that are still available
             self.loaded_zips = {zip_name for zip_name in self.loaded_zips if zip_name in self.available_zips}
             
-            # If no zips are loaded after filtering, try to restore from config
+            # If no models are loaded after filtering, try to restore from config
             if not self.loaded_zips and 'loaded_zips' in self.config:
                 for zip_name in self.config.get('loaded_zips', []):
                     if zip_name in self.available_zips:
                         self.loaded_zips.add(zip_name)
-                logger.info(f"Restored {len(self.loaded_zips)} zips from config")
+                logger.info(f"Restored {len(self.loaded_zips)} model files from config")
             
             # Save the configuration to ensure it's up to date
             self.config['loaded_zips'] = list(self.loaded_zips)
@@ -257,7 +289,7 @@ class MediaManager:
             logger.error(f"Error refreshing media files: {e}\n{traceback.format_exc()}")
     
     def get_media_paths(self):
-        """Get all media paths from loaded zip files"""
+        """Get all media paths from loaded model files"""
         media_paths = {
             'images': [],
             'gifs': [],
@@ -265,45 +297,40 @@ class MediaManager:
         }
         
         try:
-            # Check if we have any loaded zips
+            # Check if we have any loaded models
             if not self.loaded_zips:
-                logger.warning("No zip files are currently loaded")
+                logger.warning("No model files are currently loaded")
                 return media_paths
                 
-            logger.info(f"Getting media paths from {len(self.loaded_zips)} loaded zip files: {', '.join(self.loaded_zips)}")
+            logger.info(f"Getting media paths from {len(self.loaded_zips)} loaded model files: {', '.join(self.loaded_zips)}")
             
-            # Process each loaded zip file
+            # Process each loaded model file
             for zip_name in self.loaded_zips:
                 if zip_name in self.available_zips:
                     zip_path = self.available_zips[zip_name]
-                    logger.info(f"Processing zip file: {zip_path}")
+                    logger.info(f"Processing model file: {zip_path}")
+                    
+                    # Process zip file to extract media paths
                     try:
-                        with zipfile.ZipFile(zip_path, 'r') as zf:
-                            file_list = zf.namelist()
-                            logger.info(f"Found {len(file_list)} files in {zip_name}")
-                            
-                            for filename in file_list:
-                                # Skip directories and macOS metadata
-                                if filename.endswith('/') or '__MACOSX' in filename or '.DS_Store' in filename:
-                                    continue
-                                    
-                                lower_name = filename.lower()
-                                # Images
-                                if lower_name.endswith(('.jpg', '.jpeg', '.png', '.webp', '.bmp')):
-                                    media_paths['images'].append((zip_path, filename))
-                                # GIFs
-                                elif lower_name.endswith('.gif'):
-                                    media_paths['gifs'].append((zip_path, filename))
-                                # Videos
-                                elif lower_name.endswith(('.mp4', '.webm', '.avi', '.mkv', '.mov')):
-                                    media_paths['videos'].append((zip_path, filename))
+                        from media.path_utils import MediaPathManager
+                        path_manager = MediaPathManager()
+                        
+                        # Pass only the currently processing zip to get_media_paths
+                        paths = path_manager.get_media_paths({zip_name})
+                        
+                        # Add paths to the main list
+                        media_paths['images'].extend(paths.get('images', []))
+                        media_paths['gifs'].extend(paths.get('gifs', []))
+                        media_paths['videos'].extend(paths.get('videos', []))
+                        
                     except Exception as e:
-                        logger.error(f"Error reading zip file {zip_name}: {e}\n{traceback.format_exc()}")
+                        logger.error(f"Error getting media paths from {zip_path}: {e}\n{traceback.format_exc()}")
+                else:
+                    logger.warning(f"Model file {zip_name} not found in available models")
             
-            # Log detailed counts
-            logger.info(f"Found {len(media_paths['images'])} images, {len(media_paths['gifs'])} GIFs, {len(media_paths['videos'])} videos")
+            logger.info(f"Found {len(media_paths['images'])} images, {len(media_paths['gifs'])} GIFs, and {len(media_paths['videos'])} videos")
             
-            # Log some sample paths for debugging
+            # Log sample paths for debugging
             if media_paths['images']:
                 sample_count = min(3, len(media_paths['images']))
                 logger.info(f"Sample image paths: {media_paths['images'][:sample_count]}")

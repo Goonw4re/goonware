@@ -3,8 +3,17 @@ import logging
 import win32api
 import win32con
 import win32gui
+import ctypes
+import time
+import threading
+import win32process
 
 logger = logging.getLogger(__name__)
+
+# Define Windows message constants for custom window messages
+WM_USER = 1024
+WM_APP = 32768
+WM_GOONWARE_MESSAGE = WM_APP + 100
 
 class InstanceManager:
     def __init__(self, app_name="Goonware"):
@@ -16,6 +25,189 @@ class InstanceManager:
         if not os.path.exists(assets_dir):
             os.makedirs(assets_dir)
             logger.info(f"Created assets directory at: {assets_dir}")
+        
+        # For message passing between instances
+        self.message_queue = []
+        self.message_callback = None
+        self.wnd_class = None
+        self.hwnd = None
+        self.is_listening = False
+        
+    def start_message_listener(self, callback=None):
+        """Start listening for messages from other instances"""
+        if self.is_listening:
+            logger.warning("Message listener already running")
+            return True
+            
+        try:
+            self.message_callback = callback
+            self.is_listening = True
+            
+            # Start listener in a separate thread to avoid blocking UI
+            thread = threading.Thread(target=self._create_message_window, daemon=True)
+            thread.start()
+            
+            # Give it a moment to initialize
+            time.sleep(0.1)
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error starting message listener: {e}")
+            self.is_listening = False
+            return False
+    
+    def _create_message_window(self):
+        """Create a hidden window to receive messages"""
+        try:
+            # This needs to run in its own thread
+            hinst = win32api.GetModuleHandle(None)
+            
+            # Register window class
+            wnd_class = win32gui.WNDCLASS()
+            wnd_class.hInstance = hinst
+            wnd_class.lpszClassName = f"{self.app_name}MessageReceiver"
+            wnd_class.lpfnWndProc = self._window_proc
+            
+            try:
+                self.wnd_class = win32gui.RegisterClass(wnd_class)
+                logger.info(f"Registered window class: {self.wnd_class}")
+            except Exception as e:
+                logger.error(f"Error registering window class: {e}")
+                # Try unregistering first if it failed
+                try:
+                    win32gui.UnregisterClass(wnd_class.lpszClassName, hinst)
+                    self.wnd_class = win32gui.RegisterClass(wnd_class)
+                except:
+                    # If it still fails, use a different class name
+                    wnd_class.lpszClassName = f"{self.app_name}MessageReceiver_{int(time.time())}"
+                    self.wnd_class = win32gui.RegisterClass(wnd_class)
+            
+            # Create window
+            self.hwnd = win32gui.CreateWindow(
+                wnd_class.lpszClassName,
+                f"{self.app_name}MessageWindow",
+                0, 0, 0, 0, 0,
+                0, 0, hinst, None
+            )
+            
+            logger.info(f"Created message window: {self.hwnd}")
+            
+            # Message loop
+            msg = ctypes.wintypes.MSG()
+            while self.is_listening:
+                if win32gui.PeekMessage(ctypes.byref(msg), 0, 0, 0, win32con.PM_REMOVE):
+                    win32gui.TranslateMessage(ctypes.byref(msg))
+                    win32gui.DispatchMessage(ctypes.byref(msg))
+                time.sleep(0.01)
+                
+            # Clean up
+            if self.hwnd:
+                win32gui.DestroyWindow(self.hwnd)
+                self.hwnd = None
+                
+            if self.wnd_class:
+                win32gui.UnregisterClass(wnd_class.lpszClassName, hinst)
+                self.wnd_class = None
+                
+        except Exception as e:
+            logger.error(f"Error in message window thread: {e}")
+    
+    def _window_proc(self, hwnd, msg, wparam, lparam):
+        """Handle window messages"""
+        try:
+            if msg == WM_GOONWARE_MESSAGE:
+                # Extract message from lparam (pointer to string)
+                try:
+                    # Get length of string from wparam
+                    msg_len = wparam
+                    if msg_len > 0:
+                        # Create buffer to receive the string
+                        buffer = ctypes.create_string_buffer(msg_len + 1)
+                        ctypes.windll.kernel32.lstrcpyA(buffer, lparam)
+                        message = buffer.value.decode('utf-8')
+                        
+                        logger.info(f"Received message: {message}")
+                        
+                        # Add to queue and process
+                        self.message_queue.append(message)
+                        self._process_message(message)
+                except Exception as e:
+                    logger.error(f"Error extracting message: {e}")
+                
+                return 0
+                
+            return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
+        except Exception as e:
+            logger.error(f"Error in window proc: {e}")
+            return 0
+    
+    def _process_message(self, message):
+        """Process received messages"""
+        try:
+            if message.startswith("open_model:"):
+                model_path = message[len("open_model:"):]
+                logger.info(f"Received request to open model: {model_path}")
+                
+                # Call the callback if registered
+                if self.message_callback:
+                    self.message_callback("open_model", model_path)
+                
+                # Show the window
+                self.show_existing_window()
+        except Exception as e:
+            logger.error(f"Error processing message: {e}")
+    
+    def send_message(self, message):
+        """Send a message to another running instance"""
+        try:
+            # Find the window of the other instance
+            hwnd = win32gui.FindWindow(f"{self.app_name}MessageReceiver", f"{self.app_name}MessageWindow")
+            if not hwnd:
+                logger.warning("Could not find message window of other instance")
+                return False
+                
+            # Allocate memory for the message
+            message_bytes = message.encode('utf-8')
+            msg_len = len(message_bytes)
+            
+            # Allocate memory in the target process
+            pid = win32process.GetWindowThreadProcessId(hwnd)[1]
+            h_process = win32api.OpenProcess(win32con.PROCESS_VM_OPERATION | win32con.PROCESS_VM_WRITE, False, pid)
+            
+            # Allocate memory in the target process
+            remote_buffer = win32process.VirtualAllocEx(
+                h_process, 0, msg_len + 1, win32con.MEM_COMMIT, win32con.PAGE_READWRITE
+            )
+            
+            # Write the message to the allocated memory
+            win32process.WriteProcessMemory(h_process, remote_buffer, message_bytes, msg_len)
+            
+            # Send the message
+            win32gui.SendMessage(hwnd, WM_GOONWARE_MESSAGE, msg_len, remote_buffer)
+            
+            # Free the allocated memory
+            win32process.VirtualFreeEx(h_process, remote_buffer, 0, win32con.MEM_RELEASE)
+            win32api.CloseHandle(h_process)
+            
+            logger.info(f"Sent message to other instance: {message}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error sending message: {e}")
+            return False
+    
+    def stop_message_listener(self):
+        """Stop the message listener"""
+        try:
+            if self.is_listening:
+                self.is_listening = False
+                # Give it a moment to clean up
+                time.sleep(0.2)
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Error stopping message listener: {e}")
+            return False
 
     def check_instance(self):
         """Check if another instance is running"""

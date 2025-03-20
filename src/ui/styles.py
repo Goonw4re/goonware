@@ -48,4 +48,4 @@ def configure_styles():
     style.configure('Modern.Horizontal.TScale',
                    background='#1e1e1e',
                    troughcolor='#3d3d3d',
-                   slidercolor='#007acc')
+                   slidercolor='darkorchid3')

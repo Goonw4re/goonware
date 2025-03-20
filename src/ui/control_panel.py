@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 from .styles import configure_styles
 from .components.media_files_panel import MediaFilesPanel
 from .components.display_settings_panel import DisplaySettingsPanel
+from .components.panic_key_panel import PanicKeyPanel
 from .components.title_bar import TitleBar
 
 class ControlPanel:
@@ -33,19 +34,20 @@ class ControlPanel:
             
             # Remove window decorations and set fixed size
             root.overrideredirect(True)
-            root.geometry("397x580")  # Adjusted width to 400px and height to 575px
+            root.geometry("397x635")  # Reduced height to match more compact panic key panel
             root.resizable(False, False)  # Prevent resizing
             
             # Initialize variables
             self.interval = tk.DoubleVar(value=0.1)
             self.max_popups = tk.IntVar(value=25)
-            self.popup_probability = tk.IntVar(value=5)  # Default to 5%
+            self.popup_probability = tk.IntVar(value=5)
             
             # Import UI components only when needed
             try:
                 from .styles import configure_styles
                 from .components.media_files_panel import MediaFilesPanel
                 from .components.display_settings_panel import DisplaySettingsPanel
+                from .components.panic_key_panel import PanicKeyPanel
                 from .components.title_bar import TitleBar
                 
                 logger.info("Successfully imported UI components")
@@ -75,14 +77,14 @@ class ControlPanel:
                 row=0,
                 column=0,
                 sticky=(tk.W, tk.E, tk.N, tk.S),
-                pady=(0, 8)  # Reduced spacing between panels
+                pady=(0, 5)  # Reduced spacing between panels
             )
             
             self.settings_panel = DisplaySettingsPanel(
                 self.content_frame,
                 self.interval,
                 self.max_popups,
-                self.popup_probability,  # Add popup probability variable
+                self.popup_probability,
                 on_toggle,
                 on_panic
             )
@@ -90,7 +92,19 @@ class ControlPanel:
                 row=1,
                 column=0,
                 sticky=(tk.W, tk.E, tk.N, tk.S),
-                pady=(0, 8)  # Reduced spacing between panels
+                pady=(0, 5)  # Reduced spacing between panels
+            )
+            
+            # Add the new panic key panel
+            self.panic_key_panel = PanicKeyPanel(
+                self.content_frame,
+                on_panic
+            )
+            self.panic_key_panel.grid(
+                row=2,
+                column=0,
+                sticky=(tk.W, tk.E, tk.N, tk.S),
+                pady=(0, 5)  # Reduced spacing between panels
             )
             
             # Configure grid weights
@@ -132,12 +146,70 @@ class ControlPanel:
             window.update_idletasks()
             width = window.winfo_width()
             height = window.winfo_height()
-            x = (window.winfo_screenwidth() // 2) - (width // 2)
-            y = (window.winfo_screenheight() // 2) - (height // 2)
+            
+            # Get screen dimensions
+            screen_width = window.winfo_screenwidth()
+            screen_height = window.winfo_screenheight()
+            
+            # Calculate centered position with clamping to ensure window stays on screen
+            x = max(0, min((screen_width - width) // 2, screen_width - width))
+            y = max(0, min((screen_height - height) // 2, screen_height - height))
+            
+            # Set position
             window.geometry(f"{width}x{height}+{x}+{y}")
             logger.info(f"Window centered at {x},{y} with size {width}x{height}")
+            
+            # Add protocol to check window position after any movement
+            self._add_position_check(window)
         except Exception as e:
             logger.error(f"Error centering window: {e}\n{traceback.format_exc()}")
+    
+    def _add_position_check(self, window):
+        """Add a periodic check to ensure window stays on screen"""
+        try:
+            # Function to check and correct window position
+            def check_window_position():
+                if not window.winfo_exists():
+                    return
+                
+                # Get current position and size
+                x = window.winfo_x()
+                y = window.winfo_y()
+                width = window.winfo_width()
+                height = window.winfo_height()
+                
+                # Get screen dimensions
+                screen_width = window.winfo_screenwidth()
+                screen_height = window.winfo_screenheight()
+                
+                # Check if window needs repositioning
+                needs_reposition = False
+                
+                # Clamp x position
+                new_x = max(0, min(x, screen_width - width))
+                if new_x != x:
+                    x = new_x
+                    needs_reposition = True
+                
+                # Clamp y position
+                new_y = max(0, min(y, screen_height - height))
+                if new_y != y:
+                    y = new_y
+                    needs_reposition = True
+                
+                # Reposition if needed
+                if needs_reposition:
+                    window.geometry(f"+{x}+{y}")
+                    logger.debug(f"Repositioned window to {x},{y}")
+                
+                # Schedule next check
+                window.after(500, check_window_position)
+            
+            # Start the periodic check
+            window.after(500, check_window_position)
+            
+        except Exception as e:
+            logger.error(f"Error setting up position check: {e}\n{traceback.format_exc()}")
 
     def _set_popup_position(self, window):
         """Set the position of the popup window"""

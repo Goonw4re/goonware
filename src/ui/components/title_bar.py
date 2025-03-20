@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+import os
 
 class TitleBar:
     def __init__(self, parent, window, title="GOONWARE"):
@@ -19,16 +20,58 @@ class TitleBar:
         # Configure styles
         style = ttk.Style()
         style.configure('TitleBar.TFrame',
-                       background='#2d2d2d',
+                       background='#1a1a1a',  # Darker background color
                        relief='flat')
         style.configure('TitleBar.TLabel',
-                       background='#2d2d2d',
-                       foreground='darkorchid3',
-                       font=('Microsoft Sans Serif', 12))
+                       background='#1a1a1a',  # Match the new background
+                       foreground='#BB86FC',
+                       font=('Segoe UI', 12, 'bold'))
+        
+        # New styles for buttons
         style.configure('TitleBarButton.TLabel',
-                       background='#2d2d2d',
-                       foreground='white',
-                       font=('Segoe UI', 10))
+                       background='#1a1a1a',  # Match the new background
+                       foreground='#FFFFFF',
+                       font=('Segoe UI', 10, 'bold'))
+        style.configure('HideButton.TLabel',
+                       background='#1a1a1a',  # Match the new background
+                       foreground='#888888',  # Gray color for hide
+                       font=('Segoe UI', 10, 'bold'))
+        style.configure('ExitButton.TLabel',
+                       background='#1a1a1a',  # Match the new background
+                       foreground='#FF5252',  # Red color for exit
+                       font=('Segoe UI', 10, 'bold'))
+        
+        # Load icon
+        try:
+            # Determine the path to the icon
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(script_dir)))
+            icon_path = os.path.join(project_root, "assets", "icon.png")
+            
+            # Create PhotoImage
+            self.icon = tk.PhotoImage(file=icon_path)
+            
+            # Scale down the icon
+            original_width = self.icon.width()
+            original_height = self.icon.height()
+            scale_factor = 0.02  # Adjust this to make the icon smaller
+            scaled_width = int(original_width * scale_factor)
+            scaled_height = int(original_height * scale_factor)
+            self.icon = self.icon.subsample(
+                original_width // scaled_width, 
+                original_height // scaled_height
+            )
+            
+            # Icon label
+            self.icon_label = ttk.Label(
+                self.frame, 
+                image=self.icon,
+                style='TitleBar.TLabel'
+            )
+            self.icon_label.pack(side=tk.LEFT, padx=(10, 5), pady=5)
+        except Exception as e:
+            print(f"Error loading title bar icon: {e}")
+            self.icon = None
         
         # Title label
         self.title_label = ttk.Label(
@@ -36,34 +79,42 @@ class TitleBar:
             text=title,
             style='TitleBar.TLabel'
         )
-        self.title_label.pack(side=tk.LEFT, padx=10)
+        self.title_label.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Button frame to align buttons
+        button_frame = ttk.Frame(self.frame, style='TitleBar.TFrame')
+        button_frame.pack(side=tk.RIGHT, padx=10, pady=0)  # Remove vertical padding
+        
+        # Use a container to help with vertical centering
+        button_container = ttk.Frame(button_frame, style='TitleBar.TFrame')
+        button_container.pack(expand=True, fill=tk.BOTH)
         
         # Exit button
         self.exit_button = ttk.Label(
-            self.frame,
-            text="Exit",
-            style='TitleBarButton.TLabel',
+            button_container,
+            text="✕",  # Use a more minimalist close symbol
+            style='ExitButton.TLabel',
             cursor="hand2"
         )
-        self.exit_button.pack(side=tk.RIGHT, padx=10)
+        self.exit_button.pack(side=tk.RIGHT, padx=(5, 0), anchor='center')
         
         # Close/minimize button
         self.close_button = ttk.Label(
-            self.frame,
-            text="Hide",
-            style='TitleBarButton.TLabel',
+            button_container,
+            text="—",  # Use a minimalist hide symbol
+            style='HideButton.TLabel',
             cursor="hand2"
         )
-        self.close_button.pack(side=tk.RIGHT, padx=5)
+        self.close_button.pack(side=tk.RIGHT, padx=(5, 5), pady=(0, 2), anchor='center')
         
-        # Bind events'
+        # Bind events
         self.close_button.bind('<Button-1>', self._on_close)
-        self.close_button.bind('<Enter>', lambda e: self._on_hover(e, '#585757'))
-        self.close_button.bind('<Leave>', lambda e: self._on_leave(e))
+        self.close_button.bind('<Enter>', lambda e: self._on_hover(e, '#AAAAAA', 'HideButton.TLabel'))
+        self.close_button.bind('<Leave>', lambda e: self._on_leave(e, 'HideButton.TLabel'))
         
         self.exit_button.bind('<Button-1>', self._on_exit)
-        self.exit_button.bind('<Enter>', lambda e: self._on_hover(e, '#ff0000'))
-        self.exit_button.bind('<Leave>', lambda e: self._on_leave(e))
+        self.exit_button.bind('<Enter>', lambda e: self._on_hover(e, '#8B0000', 'ExitButton.TLabel'))
+        self.exit_button.bind('<Leave>', lambda e: self._on_leave(e, 'ExitButton.TLabel'))
         
         # Initialize drag variables
         self._drag_data = {"x": 0, "y": 0, "dragging": False}
@@ -113,13 +164,16 @@ class TitleBar:
             import os
             os._exit(0)
     
-    def _on_hover(self, event, color):
+    def _on_hover(self, event, color, style):
         """Change background color on hover"""
-        event.widget.configure(background=color)
+        event.widget.configure(foreground=color)
     
-    def _on_leave(self, event):
-        """Restore original background color"""
-        event.widget.configure(background='#2d2d2d')
+    def _on_leave(self, event, style):
+        """Restore original color"""
+        if style == 'HideButton.TLabel':
+            event.widget.configure(foreground='#888888')
+        elif style == 'ExitButton.TLabel':
+            event.widget.configure(foreground='#FF5252')
     
     def _reset_drag(self):
         """Reset drag state"""
@@ -148,11 +202,24 @@ class TitleBar:
             window_width = self.window.winfo_width()
             window_height = self.window.winfo_height()
             
-            # Clamp position to screen boundaries
-            x = max(0, min(x, self.screen_width - window_width))
-            y = max(0, min(y, self.screen_height - window_height))
+            # Get screen dimensions - refresh every time to handle multi-monitor setups
+            screen_width = self.window.winfo_screenwidth()
+            screen_height = self.window.winfo_screenheight()
             
-            # Update window position
+            # Calculate strict clamping to keep window fully on screen
+            # Left edge cannot be less than 0
+            x = max(0, x)
+            
+            # Top edge cannot be less than 0
+            y = max(0, y)
+            
+            # Right edge cannot exceed screen width
+            x = min(x, screen_width - window_width)
+            
+            # Bottom edge cannot exceed screen height
+            y = min(y, screen_height - window_height)
+            
+            # Apply the new position
             self.window.geometry(f"+{x}+{y}")
     
     def grid(self, **kwargs):

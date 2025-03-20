@@ -45,11 +45,11 @@ class MediaFilesPanel(ttk.Frame):
         # Create panel title
         title_label = ttk.Label(
             self,
-            text="Media Files",
+            text="Model Files",
             style='Modern.TLabel',
             font=('Segoe UI', 12, 'bold')
         )
-        title_label.pack(anchor=tk.W, padx=5, pady=(5, 0))
+        title_label.pack(anchor=tk.W, padx=5, pady=(0, 0))
         
         # Create controls
         self._create_controls()
@@ -89,7 +89,7 @@ class MediaFilesPanel(ttk.Frame):
         # Info label
         ttk.Label(
             self,
-            text="Select Models:",
+            text="Select Model Files:",
             style='MediaFiles.TLabel'
         ).pack(fill=tk.X, padx=5, pady=(10, 5))
     
@@ -101,7 +101,7 @@ class MediaFilesPanel(ttk.Frame):
         # Create canvas without visible scrollbar
         canvas = tk.Canvas(
             list_frame,
-            height=180,  # Increased height for better visibility
+            height=145,  # Reduced by ~20% (was 180)
             bg='#1e1e1e',
             highlightthickness=0,
             borderwidth=0
@@ -221,7 +221,7 @@ class MediaFilesPanel(ttk.Frame):
             if not available_zips:
                 no_models_label = ttk.Label(
                     self.file_list_frame,
-                    text="No models found in models folder",
+                    text="No model files found in models folder",
                     style="MediaFiles.TLabel"
                 )
                 no_models_label.pack(pady=10)

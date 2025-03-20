@@ -86,9 +86,9 @@ class MediaDisplay:
         self.video_paths = []
         
         # Media chance weights (percentage)
-        self.image_chance = 70
-        self.gif_chance = 20
-        self.video_chance = 10
+        self.image_chance = 40
+        self.gif_chance = 40
+        self.video_chance = 20
         
         # Selected zip files
         self.selected_zip_files = set()
@@ -113,9 +113,11 @@ class MediaDisplay:
                 settings = parent.media_manager.get_display_settings()
                 # CRITICAL FIX: Properly load bounce_enabled from settings
                 self.bounce_enabled = bool(int(settings.get('bounce_enabled', 0)))
-                self.bounce_chance = 0.15 if self.bounce_enabled else 0.0
-                logger.info(f"Loaded bounce settings from config: enabled={self.bounce_enabled}, chance={self.bounce_chance}")
-                print(f"DEBUG BOUNCE_INIT: Loaded bounce settings: enabled={self.bounce_enabled}, chance={self.bounce_chance}")
+                # Load bounce chance from settings as a decimal value (convert from percentage)
+                bounce_chance_pct = float(settings.get('bounce_chance', 15.0))
+                self.bounce_chance = bounce_chance_pct / 100.0 if self.bounce_enabled else 0.0
+                logger.info(f"Loaded bounce settings from config: enabled={self.bounce_enabled}, chance={self.bounce_chance*100}%")
+                print(f"DEBUG BOUNCE_INIT: Loaded bounce settings: enabled={self.bounce_enabled}, chance={self.bounce_chance*100}%")
             except Exception as e:
                 logger.error(f"Error loading bounce settings: {e}")
                 print(f"DEBUG BOUNCE_INIT: Error loading bounce settings: {e}")
@@ -192,8 +194,10 @@ class MediaDisplay:
                 settings = self.parent.media_manager.get_display_settings()
                 bounce_setting = settings.get('bounce_enabled', 0)
                 self.bounce_enabled = bool(int(bounce_setting))
-                self.bounce_chance = 0.25 if self.bounce_enabled else 0.0
-                print(f"DEBUG START: Reloaded bounce_enabled={self.bounce_enabled}, chance={self.bounce_chance}")
+                # Get bounce chance percentage and convert to decimal
+                bounce_chance_pct = float(settings.get('bounce_chance', 15.0))
+                self.bounce_chance = bounce_chance_pct / 100.0 if self.bounce_enabled else 0.0
+                print(f"DEBUG START: Reloaded bounce_enabled={self.bounce_enabled}, chance={self.bounce_chance*100}%")
             except Exception as e:
                 print(f"DEBUG START: Error reloading bounce settings: {e}")
         
@@ -505,7 +509,10 @@ class MediaDisplay:
         
         # Update the settings
         self.bounce_enabled = enabled
-        self.bounce_chance = 0.15 if enabled else 0.0
+        
+        # If bounce is disabled, ensure bounce_chance is 0
+        if not enabled:
+            self.bounce_chance = 0.0
         
         print(f"DEBUG BOUNCE_SET: Bounce enabled set to {self.bounce_enabled}, chance: {self.bounce_chance*100}%")
         logger.info(f"Bounce chance set to {self.bounce_chance*100}%")
@@ -514,24 +521,6 @@ class MediaDisplay:
         if enabled:
             print(f"DEBUG BOUNCE_SET: Starting animation thread because bounce was enabled")
             self.animation_manager.start_bounce_thread()
-        
-        # Apply bouncing to existing windows if enabled (with 15% chance)
-        if enabled and self.window_manager.current_windows:
-            print(f"DEBUG BOUNCE_SET: Checking {len(self.window_manager.current_windows)} existing windows for bouncing")
-            for window in self.window_manager.current_windows:
-                if window not in self.window_manager.window_velocities:
-                    # Give this window a chance to bounce
-                    bounce_roll = random.random()
-                    if bounce_roll < self.bounce_chance:
-                        # Initialize velocity for bouncing window
-                        velocity_x = random.choice([-1, 1]) * random.randint(10, 20)
-                        velocity_y = random.choice([-1, 1]) * random.randint(10, 20)
-                        
-                        self.window_manager.window_velocities[window] = (velocity_x, velocity_y)
-                        print(f"DEBUG BOUNCE_SET: Added bouncing to existing window with velocity: ({velocity_x}, {velocity_y})")
-                        logger.info(f"Added bouncing to existing window with velocity: ({velocity_x}, {velocity_y})")
-                    else:
-                        print(f"DEBUG BOUNCE_SET: Existing window not selected for bouncing (roll: {bounce_roll:.3f})")
         elif not enabled:
             # If bounce is disabled, remove all velocities
             if hasattr(self.window_manager, 'window_velocities'):
@@ -591,9 +580,9 @@ class MediaDisplay:
         total = image_weight + gif_weight + video_weight
         if total <= 0:
             logger.warning("Invalid media weights, using defaults")
-            self.image_chance = 60
-            self.gif_chance = 25
-            self.video_chance = 15
+            self.image_chance = 45
+            self.gif_chance = 35
+            self.video_chance = 20
             return
             
         logger.info(f"Setting media weights: image={image_weight}, gif={gif_weight}, video={video_weight}")
@@ -692,31 +681,32 @@ class MediaDisplay:
                     time.sleep(0.01)
                     continue
                 
-                # Check if we should display another window
-                if self.currently_displayed < self.max_windows:
-                    # CRITICAL FIX: Double-check running flag and prevent_new_popups flag
-                    if not self.running or (hasattr(self, 'prevent_new_popups') and self.prevent_new_popups):
-                        logger.info("Display stopped or new popups prevented, skipping window creation")
-                        break
+                # CRITICAL FIX: Always create a new window regardless of current window count
+                # The window manager will enforce the max_windows limit by removing the oldest window
+                
+                # CRITICAL FIX: Double-check running flag and prevent_new_popups flag
+                if not self.running or (hasattr(self, 'prevent_new_popups') and self.prevent_new_popups):
+                    logger.info("Display stopped or new popups prevented, skipping window creation")
+                    break
+                
+                # Choose media type based on weights
+                media_type = self._choose_media_type()
+                
+                # Display chosen media type
+                if media_type == "image" and self.image_paths:
+                    self.image_loader.display_image()
+                    self.currently_displayed += 1
+                    self.last_display_time = time.time()
                     
-                    # Choose media type based on weights
-                    media_type = self._choose_media_type()
+                elif media_type == "gif" and self.gif_paths:
+                    self.gif_loader.display_gif()
+                    self.currently_displayed += 1
+                    self.last_display_time = time.time()
                     
-                    # Display chosen media type
-                    if media_type == "image" and self.image_paths:
-                        self.image_loader.display_image()
-                        self.currently_displayed += 1
-                        self.last_display_time = time.time()
-                        
-                    elif media_type == "gif" and self.gif_paths:
-                        self.gif_loader.display_gif()
-                        self.currently_displayed += 1
-                        self.last_display_time = time.time()
-                        
-                    elif media_type == "video" and self.video_paths:
-                        self.video_loader.display_video()
-                        self.currently_displayed += 1
-                        self.last_display_time = time.time()
+                elif media_type == "video" and self.video_paths:
+                    self.video_loader.display_video()
+                    self.currently_displayed += 1
+                    self.last_display_time = time.time()
                 
                 # Wait for next display interval or until stopped
                 self.display_event.wait(self.display_interval)
@@ -814,6 +804,20 @@ class MediaDisplay:
             
             # Use BILINEAR for scaling factor changes (faster)
             img = img.resize((width, height), Image.Resampling.BILINEAR)
+        
+        # Ensure minimum size of 200x150
+        width, height = img.size
+        if width < 200 or height < 150:
+            # Calculate scale to reach minimum size while maintaining aspect ratio
+            width_scale = 200 / width if width < 200 else 1
+            height_scale = 150 / height if height < 150 else 1
+            scale = max(width_scale, height_scale)
+            
+            # Apply minimum size scaling
+            new_width = max(200, int(width * scale))
+            new_height = max(150, int(height * scale))
+            img = img.resize((new_width, new_height), Image.Resampling.BILINEAR)
+            logger.info(f"Applied minimum size constraint: {width}x{height} -> {new_width}x{new_height}")
             
         return img
     

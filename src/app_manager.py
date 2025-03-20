@@ -139,7 +139,7 @@ class AppManager:
                         pass
                 
                 # Add global hotkey that works even when app doesn't have focus
-                self.panic_hotkey = keyboard.add_hotkey(key, panic_key_wrapper, suppress=False)
+                self.panic_hotkey = keyboard.add_hotkey(key, panic_key_wrapper, suppress=True)
                 logger.info(f"Added global hotkey for panic key '{key}'")
             except Exception as e:
                 logger.error(f"Error setting up global hotkey: {e}")
@@ -166,6 +166,22 @@ class AppManager:
     def _convert_key_for_binding(self, key):
         """Convert key string to Tkinter binding format"""
         try:
+            # Handle empty or None key
+            if not key:
+                logger.warning("Received empty key, defaulting to apostrophe")
+                return "'"
+                
+            # Log the received key
+            logger.info(f"Converting key for binding: '{key}'")
+                
+            # Handle apostrophe and quote specially
+            if key == "'" or key == "apostrophe":
+                logger.info("Converting apostrophe key")
+                return "'"
+            if key == '"' or key == "quotedbl":
+                logger.info("Converting double quote key")
+                return '"'
+            
             # Special key conversions
             key_map = {
                 'space': 'space',
@@ -183,23 +199,47 @@ class AppManager:
                 'home': 'Home',
                 'end': 'End',
                 'page up': 'Prior',
-                'page down': 'Next'
+                'page down': 'Next',
+                'pageup': 'Prior',
+                'pagedown': 'Next',
+                'comma': 'comma',
+                'period': 'period',
+                'slash': 'slash',
+                'backslash': 'backslash',
+                'semicolon': 'semicolon',
+                'colon': 'colon',
+                'plus': 'plus',
+                'minus': 'minus',
+                'equal': 'equal',
+                'parenleft': '(',
+                'parenright': ')',
+                'bracketleft': '[',
+                'bracketright': ']',
+                'braceleft': '{',
+                'braceright': '}'
             }
             
+            # Convert keysym to lowercase for consistent mapping
+            key_lower = key.lower()
+            
             # Check if the key is in our map
-            if key.lower() in key_map:
-                return key_map[key.lower()]
+            if key_lower in key_map:
+                logger.info(f"Found key in map: {key_lower} -> {key_map[key_lower]}")
+                return key_map[key_lower]
             
             # If it's a function key (F1-F12)
-            if key.lower().startswith('f') and key[1:].isdigit() and 1 <= int(key[1:]) <= 12:
+            if key_lower.startswith('f') and key[1:].isdigit() and 1 <= int(key[1:]) <= 12:
+                logger.info(f"Handling function key: {key}")
                 return key.upper()
             
             # For a single character, just return it
             if len(key) == 1:
+                logger.info(f"Single character key: {key}")
                 return key
                 
             # If it's a combo key like Ctrl+C, convert each part
             if '+' in key:
+                logger.info(f"Handling combo key: {key}")
                 parts = key.split('+')
                 modifiers = []
                 for part in parts[:-1]:
@@ -210,14 +250,24 @@ class AppManager:
                         modifiers.append('Alt')
                     elif part in ('shift'):
                         modifiers.append('Shift')
+                    elif part in ('windows', 'win', 'cmd', 'command'):
+                        modifiers.append('Win')
                     else:
                         modifiers.append(part.capitalize())
                 
                 # Join with hyphen and add the key
-                return '-'.join(modifiers + [self._convert_key_for_binding(parts[-1])])
+                result = '-'.join(modifiers + [self._convert_key_for_binding(parts[-1])])
+                logger.info(f"Converted combo key to: {result}")
+                return result
             
-            # Return the key capitalized for other cases
-            return key.capitalize()
+            # Handle alphanumeric keys
+            if key_lower.isalnum() and len(key_lower) == 1:
+                logger.info(f"Alphanumeric key: {key}")
+                return key_lower
+            
+            # If key is already in proper format (keysym), just return it
+            logger.info(f"Using key as-is: {key}")
+            return key
         except Exception as e:
             logger.error(f"Error converting key for binding: {e}")
             # Return the key unchanged

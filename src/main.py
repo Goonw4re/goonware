@@ -12,6 +12,7 @@ from tray_manager import TrayManager
 import atexit
 import signal
 import winreg
+import file_viewer  # Import the file_viewer module
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -33,6 +34,107 @@ def setup_logging():
     logger.info("Logging configured")
     return True
 
+def register_file_associations():
+    """Register .gmodel file associations in Windows"""
+    try:
+        logger.info("Registering .gmodel file associations")
+        app_path = os.path.abspath(sys.executable)
+        script_path = os.path.abspath(__file__)
+        
+        # Get the path to the assets folder for the icon
+        assets_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets')
+        icon_path = os.path.join(assets_dir, 'icon.ico')
+        
+        # If .ico doesn't exist but .png does, use the .png (Windows will handle it)
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(assets_dir, 'icon.png')
+        
+        # 1. Register the .gmodel extension
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\.gmodel") as key:
+            winreg.SetValue(key, "", winreg.REG_SZ, "GoonwareModel")
+            
+        # 2. Create file type
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\GoonwareModel") as key:
+            winreg.SetValue(key, "", winreg.REG_SZ, "Goonware Model File")
+            
+            # Set icon
+            if os.path.exists(icon_path):
+                with winreg.CreateKey(key, "DefaultIcon") as icon_key:
+                    winreg.SetValue(icon_key, "", winreg.REG_SZ, icon_path)
+            
+            # Set open command - Updated to launch the file viewer directly
+            with winreg.CreateKey(key, r"shell\open\command") as cmd_key:
+                # This launches the Python interpreter with file_viewer.py and the clicked model file
+                file_viewer_path = os.path.join(os.path.dirname(script_path), "file_viewer.py")
+                cmd = f'"{app_path}" "{file_viewer_path}" "%1"'
+                winreg.SetValue(cmd_key, "", winreg.REG_SZ, cmd)
+                
+            # Add a "View Contents" command in the right-click menu
+            with winreg.CreateKey(key, r"shell\viewcontents") as view_key:
+                winreg.SetValue(view_key, "", winreg.REG_SZ, "View Model Contents")
+                
+                # Add icon for the command
+                if os.path.exists(icon_path):
+                    winreg.SetValueEx(view_key, "Icon", 0, winreg.REG_SZ, icon_path)
+                
+                # Set the command
+                with winreg.CreateKey(view_key, "command") as view_cmd_key:
+                    file_viewer_path = os.path.join(os.path.dirname(script_path), "file_viewer.py")
+                    cmd = f'"{app_path}" "{file_viewer_path}" "%1"'
+                    winreg.SetValue(view_cmd_key, "", winreg.REG_SZ, cmd)
+                
+        # 3. Register the .gmodel extension with Explorer
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.gmodel") as key:
+            with winreg.CreateKey(key, "UserChoice") as choice_key:
+                winreg.SetValueEx(choice_key, "ProgId", 0, winreg.REG_SZ, "GoonwareModel")
+        
+        # 4. Notify the system about the change
+        try:
+            import ctypes
+            ctypes.windll.shell32.SHChangeNotify(0x08000000, 0, None, None)
+        except:
+            pass
+            
+        logger.info("Successfully registered .gmodel file associations")
+        return True
+    except Exception as e:
+        logger.error(f"Error registering file associations: {e}")
+        return False
+
+# Add a function to open the file viewer directly
+def open_file_viewer(file_path):
+    """Open the file viewer for a specific file"""
+    try:
+        logger.info(f"Opening file viewer for: {file_path}")
+        # Create a new tkinter root
+        root = tk.Tk()
+        # Disable default window decorations since file_viewer uses custom title bar
+        root.overrideredirect(True)
+        
+        # Create the viewer
+        viewer = file_viewer.GModelViewer(root, file_path)
+        
+        # Center the window on screen
+        root.update_idletasks()
+        width = root.winfo_width()
+        height = root.winfo_height()
+        screen_width = root.winfo_screenwidth()
+        screen_height = root.winfo_screenheight()
+        
+        # Calculate centered position
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        
+        # Apply position
+        root.geometry(f"+{x}+{y}")
+        
+        # Start the application
+        root.mainloop()
+        return True
+    except Exception as e:
+        logger.error(f"Error opening file viewer: {e}")
+        return False
+
 class GoonwareApp:
     def __init__(self):
         logger.info("Initializing GoonwareApp")
@@ -41,9 +143,29 @@ class GoonwareApp:
         self.models_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models')
         os.makedirs(self.models_dir, exist_ok=True)
         
+        # Register file associations
+        register_file_associations()
+        
         # Initialize managers
         self.instance_manager = InstanceManager()
+        
+        # Start message listener for inter-process communication
+        self.instance_manager.start_message_listener(self.handle_ipc_message)
+        
         self.app_manager = AppManager(self.models_dir)
+        
+        # Set application title and icon for taskbar
+        self.app_manager.root.title("GOONWARE")
+        
+        # Set app icon
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'icon.png')
+        try:
+            # Use PhotoImage for the window icon
+            icon = tk.PhotoImage(file=icon_path)
+            self.app_manager.root.iconphoto(True, icon)
+            logger.info(f"Set application icon from {icon_path}")
+        except Exception as e:
+            logger.error(f"Error setting application icon: {e}")
         
         # Create media components
         self.media_manager = MediaManager(self.models_dir, auto_load=False)
@@ -52,7 +174,11 @@ class GoonwareApp:
         
         # Set flags
         self._refresh_in_progress = False
-        self.panic_key = "'"  # Fixed panic key
+        
+        # Get panic key from settings or use apostrophe as default
+        settings = self.media_manager.get_display_settings()
+        self.panic_key = settings.get('panic_key', "'")  # Default to apostrophe key
+        logger.info(f"Using panic key from settings: {self.panic_key}")
         
         # Initialize UI
         self.ui_manager = UIManager(
@@ -628,8 +754,8 @@ class GoonwareApp:
     
     def set_panic_key(self, key):
         """Set the panic key hotkey"""
-        # Always use the fixed apostrophe key
-        key = "'"
+        # IMPROVEMENT: Allow any key to be set as the panic key, not just apostrophe
+        logger.info(f"Setting panic key to: {key}")
         self.panic_key = key
         
         # Set the panic key in app manager with proper callback
@@ -659,8 +785,8 @@ class GoonwareApp:
     def is_in_startup(self):
         """Check if application is set to run on Windows startup"""
         try:
-            # Get the absolute path to start.bat
-            app_path = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'start.bat'))
+            # Get the absolute path to start.bat in assets folder
+            app_path = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'start.bat'))
             
             # Open the registry key for current user startup
             registry_key = winreg.OpenKey(
@@ -688,8 +814,8 @@ class GoonwareApp:
     def manage_startup(self, enable):
         """Add or remove application from Windows startup"""
         try:
-            # Get the absolute path to start.bat
-            app_path = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'start.bat'))
+            # Get the absolute path to start.bat in assets folder
+            app_path = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'start.bat'))
             
             # Open the registry key for current user startup
             registry_key = winreg.OpenKey(
@@ -735,9 +861,51 @@ class GoonwareApp:
         except Exception as e:
             logger.error(f"Error checking startup setting: {e}")
     
+    def handle_ipc_message(self, message_type, message_data):
+        """Handle messages from other instances"""
+        try:
+            logger.info(f"Handling IPC message: {message_type}, data: {message_data}")
+            
+            if message_type == "open_model":
+                # Check if the file exists and has .gmodel extension
+                if os.path.exists(message_data) and message_data.lower().endswith('.gmodel'):
+                    # Show the UI first
+                    self.app_manager.root.deiconify()
+                    self.app_manager.root.lift()
+                    self.app_manager.root.focus_force()
+                    
+                    # Schedule the file viewer to open
+                    self.app_manager.root.after(500, lambda: open_file_viewer(message_data))
+                    
+                    # Also load the model into the app
+                    if hasattr(self, 'media_manager'):
+                        # May need to wait for UI to be ready
+                        def load_model():
+                            try:
+                                self.media_manager.load_zip(message_data)
+                                logger.info(f"Loaded model file from IPC message: {message_data}")
+                            except Exception as e:
+                                logger.error(f"Error loading model from IPC message: {e}")
+                        
+                        # Schedule loading after UI is ready
+                        self.app_manager.root.after(1000, load_model)
+                    else:
+                        logger.warning("Cannot load model, media_manager not initialized")
+                else:
+                    logger.warning(f"Invalid model file path: {message_data}")
+        except Exception as e:
+            logger.error(f"Error handling IPC message: {e}")
+    
     def cleanup(self):
         """Clean up resources"""
         try:
+            # Stop message listener
+            if hasattr(self, 'instance_manager'):
+                try:
+                    self.instance_manager.stop_message_listener()
+                except:
+                    pass
+            
             # Stop system tray icon if it exists
             if hasattr(self, 'tray_manager'):
                 try:
@@ -806,12 +974,30 @@ def main():
             elif sys.argv[1] == '--show-ui':
                 instance_manager.show_existing_window()
                 sys.exit(0)
+            elif sys.argv[1] == '--open-model':
+                # Open a .gmodel file directly
+                if len(sys.argv) > 2:
+                    model_path = sys.argv[2]
+                    if os.path.exists(model_path) and model_path.lower().endswith('.gmodel'):
+                        logger.info(f"Opening model file: {model_path}")
+                        # If another instance is running, tell it to open the file
+                        if instance_manager.check_instance():
+                            logger.info("Sending file open request to existing instance")
+                            instance_manager.send_message(f"open_model:{model_path}")
+                            sys.exit(0)
+                        
+                        # Launch file viewer directly instead of continuing app launch
+                        open_file_viewer(model_path)
+                        sys.exit(0)
+                    else:
+                        logger.error(f"Invalid model file: {model_path}")
+                        sys.exit(1)
         
         # Check for existing instance
         if instance_manager.check_instance():
             logger.info("Another instance is already running")
             sys.exit(0)
-        
+            
         # Register cleanup on exit
         def cleanup_on_exit():
             try:
@@ -840,6 +1026,16 @@ def main():
         
         # Create and run the application
         app = GoonwareApp()
+        
+        # If we were launched to open a model file, tell the app to load it
+        if len(sys.argv) > 2 and sys.argv[1] == '--open-model':
+            model_path = sys.argv[2]
+            if os.path.exists(model_path) and model_path.lower().endswith('.gmodel'):
+                # Add this file to the loaded models
+                if hasattr(app, 'media_manager'):
+                    app.media_manager.load_zip(model_path)
+                    logger.info(f"Added model file to loaded models: {model_path}")
+        
         app.run()
         
     except Exception as e:

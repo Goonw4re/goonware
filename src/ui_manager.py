@@ -119,7 +119,12 @@ class UIManager:
                 
                 # Update UI state if control panel exists
                 if hasattr(self, 'control_panel') and self.control_panel:
-                    self.set_running(False)
+                    # Check if media display is actually running and reflect it in the UI
+                    is_running = False
+                    if hasattr(self, 'media_display') and hasattr(self.media_display, 'running'):
+                        is_running = self.media_display.running
+                        logger.info(f"Setting UI running state to match media_display.running: {is_running}")
+                    self.set_running(is_running)
                 
                 # Reset topmost after a short delay
                 self.root.after(100, lambda: self.root.attributes('-topmost', False))
@@ -169,7 +174,7 @@ class UIManager:
             
             # Set window size
             window_width = 397
-            window_height = 580
+            window_height = 635
             
             # Calculate center position
             x = (screen_width - window_width) // 2

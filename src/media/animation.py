@@ -30,17 +30,22 @@ class AnimationManager:
         self.bounce_event = threading.Event()
         self.bounce_running = False
         
-        # Bounce settings - CRITICAL FIX: Increase default velocities
-        self.bounce_interval = 0.04  # seconds between bounce updates (25fps)
-        self.max_velocity = 10  # Maximum bounce velocity
+        # IMPROVED: Faster bouncing with better physics
+        self.bounce_interval = 0.03  # seconds between bounce updates (33fps instead of 20fps)
+        self.max_velocity = 12  # Maximum bounce velocity (increased from 6)
+        self.min_velocity = 5  # Minimum bounce velocity (increased from 3)
         
         # Performance optimizations
         self.last_bounce_update = 0
-        self.batch_size = 10  # Process windows in batches
-        self.update_interval = 0.04  # 25 FPS
+        self.batch_size = 20  # Process more windows in batches (increased from 10) 
+        self.update_interval = 0.025  # 40 FPS (faster than previous 25 FPS)
+        
+        # Additional physics properties for smoother bouncing
+        self.rebound_factor = 1.05  # Slightly faster after bouncing (energy gain)
+        self.friction = 0.995  # Very low friction to maintain speed
         
         # CRITICAL FIX: Force start the bounce thread on initialization
-        print("DEBUG BOUNCE_INIT: Animation manager initialized")
+        print("DEBUG BOUNCE_INIT: Animation manager initialized with faster bouncing")
     
     def start_bounce_thread(self):
         """Start the bounce animation thread"""
@@ -100,7 +105,7 @@ class AnimationManager:
                 if hasattr(self, 'bounce_thread') and self.bounce_thread and self.bounce_thread.is_alive():
                     logger.info("Waiting for bounce thread to exit")
                     # CRITICAL FIX: Try to join with a timeout
-                    self.bounce_thread.join(timeout=0.2)
+                    self.bounce_thread.join(timeout=0.1)  # Reduced timeout to avoid UI blocking
                     
                     # CRITICAL FIX: Check if thread is still alive
                     if self.bounce_thread.is_alive():
@@ -145,23 +150,33 @@ class AnimationManager:
         # Track last debug time to avoid excessive logging
         last_debug_time = time.time()
         
+        # IMPROVEMENT: Use a more efficient time approach with fixed timestep
+        fixed_timestep = self.update_interval
+        accumulated_time = 0
+        last_time = time.time()
+        
         while self.bounce_running:
             try:
-                # Throttle updates to maintain consistent frame rate
+                # IMPROVEMENT: More efficient timing logic
                 current_time = time.time()
-                elapsed = current_time - self.last_bounce_update
+                frame_time = current_time - last_time
+                last_time = current_time
                 
-                if elapsed < self.update_interval:
-                    # Sleep for the remaining time to maintain frame rate
-                    sleep_time = max(0.001, self.update_interval - elapsed)
-                    time.sleep(sleep_time)
-                    continue
+                # Prevent spiral of death if frame_time is too large
+                if frame_time > 0.1:
+                    frame_time = 0.1
                 
-                # Update timestamp
-                self.last_bounce_update = current_time
+                accumulated_time += frame_time
+                
+                # Update as many times as needed to catch up
+                update_count = 0
+                while accumulated_time >= fixed_timestep and update_count < 3:  # Limit to 3 updates per frame
+                    self._update_bouncing_windows()
+                    accumulated_time -= fixed_timestep
+                    update_count += 1
                 
                 # Debug logging (throttled)
-                should_debug = (current_time - last_debug_time) > 5.0  # Debug every 5 seconds
+                should_debug = (current_time - last_debug_time) > 10.0  # Reduced debug frequency to every 10 seconds
                 
                 if should_debug:
                     # Update debug timestamp
@@ -172,29 +187,16 @@ class AnimationManager:
                     window_count = len(self.display.window_manager.window_velocities) if hasattr(self.display, 'window_manager') else 0
                     print(f"DEBUG BOUNCE_LOOP: Bounce enabled: {bounce_enabled}, Bouncing windows: {window_count}")
                 
-                # Process windows with velocities (regardless of bounce_enabled)
-                if (hasattr(self.display, 'window_manager') and 
-                    hasattr(self.display.window_manager, 'window_velocities') and
-                    self.display.window_manager.window_velocities):
-                    
-                    # Get all windows with velocities
-                    windows = list(self.display.window_manager.window_velocities.keys())
-                    
-                    if should_debug:
-                        print(f"DEBUG BOUNCE_LOOP: Processing {len(windows)} bouncing windows")
-                    
-                    # Process windows in batches for better performance
-                    for i in range(0, len(windows), self.batch_size):
-                        batch = windows[i:i+self.batch_size]
-                        self._process_bounce_batch(batch, should_debug)
-                        
-                        # Small sleep between batches to prevent UI freezing
-                        if len(windows) > self.batch_size:
-                            time.sleep(0.001)
-                
                 # Check if we should exit
                 if self.bounce_event.is_set():
                     break
+                
+                # Sleep for a small amount to prevent excessive CPU usage
+                # IMPROVEMENT: Adaptive sleep based on time remaining until next update
+                remaining_time = fixed_timestep - (accumulated_time % fixed_timestep)
+                sleep_time = max(0.001, remaining_time * 0.9)  # Sleep slightly less than needed to avoid missing frames
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
                     
             except Exception as e:
                 logger.error(f"Error in bounce loop: {e}\n{traceback.format_exc()}")
@@ -202,6 +204,28 @@ class AnimationManager:
         
         logger.info("Bounce animation thread stopped")
         print("DEBUG BOUNCE_THREAD: Animation thread stopped")
+    
+    def _update_bouncing_windows(self):
+        """Update all bouncing windows in one step"""
+        # Skip if no window manager available
+        if not hasattr(self.display, 'window_manager') or not hasattr(self.display.window_manager, 'window_velocities'):
+            return
+            
+        # Get all windows with velocities
+        velocities = self.display.window_manager.window_velocities
+        if not velocities:
+            return
+            
+        windows = list(velocities.keys())
+        
+        # Process windows in batches for better performance
+        for i in range(0, len(windows), self.batch_size):
+            batch = windows[i:i+self.batch_size]
+            self._process_bounce_batch(batch, False)  # Set debug to False for speed
+            
+            # Small sleep between batches to prevent UI freezing
+            if len(windows) > self.batch_size * 2:  # Only sleep if many windows
+                time.sleep(0.0005)  # Reduced sleep time from 0.001 to 0.0005
     
     def _process_bounce_batch(self, windows, should_debug):
         """Process a batch of bouncing windows"""
@@ -245,61 +269,63 @@ class AnimationManager:
                     min_y = 0
                     max_y = window.winfo_screenheight()
                 
+                # IMPROVEMENT: Apply very slight friction to simulate air resistance
+                dx *= self.friction
+                dy *= self.friction
+                
                 # Calculate new position
                 new_x = x + dx
                 new_y = y + dy
                 
-                # Check for collisions with monitor edges
+                # IMPROVED: Better collision physics for more natural bouncing
                 hit_edge = False
                 
                 # Handle horizontal collisions with monitor boundaries
                 if new_x <= min_x:
                     # Hit left edge of monitor
-                    dx = abs(dx) * random.uniform(0.9, 1.1)  # Bounce right with slight randomness
-                    new_x = min_x
+                    dx = abs(dx) * self.rebound_factor  # Bounce right with energy gain 
+                    new_x = min_x + 1  # Offset by 1 pixel to prevent sticking
                     hit_edge = True
-                    if should_debug:
-                        print(f"DEBUG BOUNCE_COLLISION: Window hit left edge of monitor {monitor_idx}, new dx: {dx:.1f}")
                 elif new_x + width >= max_x:
                     # Hit right edge of monitor
-                    dx = -abs(dx) * random.uniform(0.9, 1.1)  # Bounce left with slight randomness
-                    new_x = max_x - width
+                    dx = -abs(dx) * self.rebound_factor  # Bounce left with energy gain
+                    new_x = max_x - width - 1  # Offset by 1 pixel to prevent sticking
                     hit_edge = True
-                    if should_debug:
-                        print(f"DEBUG BOUNCE_COLLISION: Window hit right edge of monitor {monitor_idx}, new dx: {dx:.1f}")
                     
                 # Handle vertical collisions with monitor boundaries
                 if new_y <= min_y:
                     # Hit top edge of monitor
-                    dy = abs(dy) * random.uniform(0.9, 1.1)  # Bounce down with slight randomness
-                    new_y = min_y
+                    dy = abs(dy) * self.rebound_factor  # Bounce down with energy gain
+                    new_y = min_y + 1  # Offset by 1 pixel to prevent sticking
                     hit_edge = True
-                    if should_debug:
-                        print(f"DEBUG BOUNCE_COLLISION: Window hit top edge of monitor {monitor_idx}, new dy: {dy:.1f}")
                 elif new_y + height >= max_y:
                     # Hit bottom edge of monitor
-                    dy = -abs(dy) * random.uniform(0.9, 1.1)  # Bounce up with slight randomness
-                    new_y = max_y - height
+                    dy = -abs(dy) * self.rebound_factor  # Bounce up with energy gain
+                    new_y = max_y - height - 1  # Offset by 1 pixel to prevent sticking
                     hit_edge = True
-                    if should_debug:
-                        print(f"DEBUG BOUNCE_COLLISION: Window hit bottom edge of monitor {monitor_idx}, new dy: {dy:.1f}")
                 
-                # Add a small random variation to make movement more natural
-                if not hit_edge and random.random() < 0.1:  # Only 10% of the time
-                    dx += random.uniform(-0.2, 0.2)
-                    dy += random.uniform(-0.2, 0.2)
+                # IMPROVEMENT: Occasionally add a burst of speed for more dynamic movement
+                if hit_edge and random.random() < 0.2:  # 20% chance on collision
+                    speed_boost = random.uniform(1.1, 1.3)  # 10-30% speed boost
+                    dx *= speed_boost
+                    dy *= speed_boost
+                    if should_debug:
+                        print(f"DEBUG BOUNCE_PHYSICS: Speed boost applied: {speed_boost:.2f}x")
+                
+                # Add a small random variation to make movement more natural - only when not hitting edges
+                if not hit_edge and random.random() < 0.05:  # Reduced chance from 10% to 5%
+                    dx += random.uniform(-0.3, 0.3)  # Increased randomness for more liveliness
+                    dy += random.uniform(-0.3, 0.3)
                 
                 # Ensure minimum velocity
-                min_speed = 5.0
-                if abs(dx) < min_speed:
-                    dx = min_speed if dx > 0 else -min_speed
-                if abs(dy) < min_speed:
-                    dy = min_speed if dy > 0 else -min_speed
+                if abs(dx) < self.min_velocity:
+                    dx = self.min_velocity if dx > 0 else -self.min_velocity
+                if abs(dy) < self.min_velocity:
+                    dy = self.min_velocity if dy > 0 else -self.min_velocity
                 
                 # Limit maximum velocity
-                max_speed = 20
-                dx = max(-max_speed, min(max_speed, dx))
-                dy = max(-max_speed, min(max_speed, dy))
+                dx = max(-self.max_velocity, min(self.max_velocity, dx))
+                dy = max(-self.max_velocity, min(self.max_velocity, dy))
                 
                 # Update velocity
                 self.display.window_manager.window_velocities[window] = (dx, dy)
@@ -308,7 +334,7 @@ class AnimationManager:
                 new_x = max(min_x, min(max_x - width, new_x))
                 new_y = max(min_y, min(max_y - height, new_y))
                 
-                # Move window
+                # Move window - use integer positions for better performance
                 try:
                     window.geometry(f"+{int(new_x)}+{int(new_y)}")
                 except Exception as e:

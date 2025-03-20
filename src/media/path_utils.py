@@ -2,6 +2,7 @@ import os
 import zipfile
 import logging
 import traceback
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +48,14 @@ class MediaPathManager:
                 item_path = os.path.join(self.models_dir, item)
                 logger.debug(f"Found item: {item_path}")
                 
-                # Handle zip files
-                if item.lower().endswith('.zip'):
+                # Handle zip and gmodel files (both use the zip format)
+                if item.lower().endswith(('.zip', '.gmodel')):
                     # Skip if not in selected_zips (if provided)
                     if selected_zips is not None and item not in selected_zips and item_path not in selected_zips:
-                        logger.debug(f"Skipping unselected zip: {item}")
+                        logger.debug(f"Skipping unselected archive: {item}")
                         continue
                         
-                    logger.info(f"Processing zip file: {item_path}")
+                    logger.info(f"Processing archive file: {item_path}")
                     try:
                         with zipfile.ZipFile(item_path, 'r') as zf:
                             # List all files in zip
@@ -77,7 +78,7 @@ class MediaPathManager:
                                 elif ext in video_extensions:
                                     video_paths.append((item_path, file_name))
                     except Exception as e:
-                        logger.error(f"Error processing zip file {item_path}: {e}")
+                        logger.error(f"Error processing archive file {item_path}: {e}")
                         continue
                 
                 # Handle loose files
@@ -115,24 +116,25 @@ class MediaPathManager:
             logger.error(f"Error getting media paths: {e}\n{traceback.format_exc()}")
             return {'images': [], 'gifs': [], 'videos': []}
     
-    def extract_temp_file(self, zip_path, file_name):
-        """Extract a file from a zip to a temporary file"""
-        import time
-        
+    def extract_file_from_zip(self, zip_path, internal_path, target_dir=None):
+        """Extract a file from a zip or gmodel archive to a temporary file"""
         try:
-            # Create temporary file in assets/resources directory
-            temp_dir = os.path.join(self.assets_dir, 'resources', 'temp')
-            os.makedirs(temp_dir, exist_ok=True)
+            if not target_dir:
+                target_dir = tempfile.gettempdir()
             
-            temp_file = os.path.join(temp_dir, f"temp_{int(time.time())}_{os.path.basename(file_name)}")
+            if not os.path.exists(zip_path):
+                logger.error(f"ZIP/GMODEL file not found: {zip_path}")
+                return None
             
-            # Extract file to temporary location
-            with zipfile.ZipFile(zip_path, 'r') as zf:
-                if file_name not in zf.namelist():
-                    logger.error(f"File {file_name} not found in zip {zip_path}")
+            # Both .zip and .gmodel files use the same zipfile format
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                if internal_path not in zip_ref.namelist():
+                    logger.error(f"File {internal_path} not found in archive {zip_path}")
                     return None
                     
-                with zf.open(file_name) as f_in, open(temp_file, 'wb') as f_out:
+                temp_file = os.path.join(target_dir, f"temp_{int(time.time())}_{os.path.basename(internal_path)}")
+                
+                with zip_ref.open(internal_path) as f_in, open(temp_file, 'wb') as f_out:
                     f_out.write(f_in.read())
             
             logger.info(f"Extracted file to temporary location: {temp_file}")

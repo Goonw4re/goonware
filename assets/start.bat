@@ -5,9 +5,10 @@ mode con: cols=90 lines=30
 color 0D 
 setlocal enabledelayedexpansion
 
-:: Set script directory
-set "SCRIPT_DIR=%~dp0"
-cd /d "%SCRIPT_DIR%"
+:: Set script directory and navigate to project root
+set "ASSETS_DIR=%~dp0"
+set "PROJECT_ROOT=%ASSETS_DIR%\.."
+cd /d "%PROJECT_ROOT%"
 
 :: Function to print a fancy header
 echo ==================================================
@@ -49,7 +50,7 @@ if not exist "assets\first_run.flag" (
     call venv\Scripts\activate.bat
     echo [+] Installing dependencies...
     pip install -r assets/requirements.txt
-    if errorlevel 1 ('
+    if errorlevel 1 (
         color 0C
         echo [!] Failed to install dependencies!
         pause
@@ -74,10 +75,9 @@ if errorlevel 1 (
     echo [✓] Showing GOONWARE UI.
 ) else (
     color 0D 
-    echo [+] Existing instance found. Opening Config UI...
-    start /B pythonw src/main.py --show-ui
-    echo [✓] Showing existing GOONWARE UI.
+    echo [+] Existing instance found
+    echo [✓] Open GOONWARE UI from system tray.
 )
 
 timeout /t 2 /nobreak >nul
-exit /b 0
+exit /b 0 

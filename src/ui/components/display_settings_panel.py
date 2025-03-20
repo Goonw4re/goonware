@@ -17,7 +17,7 @@ class DisplaySettingsPanel:
         self.interval = interval_var
         self.max_popups = max_popups_var
         self.probability = probability_var
-        self.bounce_enabled = tk.BooleanVar(value=False)  # Add bounce control variable
+        self.bounce_chance = tk.DoubleVar(value=0.0)  # Default to disabled (0%)
         self.on_toggle = on_toggle
         self.on_panic = on_panic
         self.is_running = False
@@ -38,7 +38,18 @@ class DisplaySettingsPanel:
                        relief='flat')
         style.configure('Modern.Accent.TButton',
                        background='#0078d4',
-                       foreground='white')
+                       foreground='black')
+        style.map('Modern.TButton',
+                  background=[('active', '#606060'), ('!disabled', '#444444')],
+                  foreground=[('active', 'black'), ('!disabled', 'black')])
+        
+        # Configure transparent scale style for bounce chance slider
+        style.configure('Transparent.Horizontal.TScale',
+                      background='#1e1e1e',
+                      troughcolor='#1e1e1e',
+                      lightcolor='#1e1e1e',
+                      darkcolor='#1e1e1e',
+                      slidercolor='darkorchid3')
         
         # Load saved settings
         root = self.frame.winfo_toplevel()
@@ -48,20 +59,25 @@ class DisplaySettingsPanel:
             self.max_popups.set(settings.get('max_popups', 25))
             self.probability.set(settings.get('popup_probability', 5))
             
-            # CRITICAL FIX: Properly load bounce_enabled as boolean from integer setting
-            bounce_setting = settings.get('bounce_enabled', 0)
-            bounce_enabled = bool(int(bounce_setting))
-            self.bounce_enabled.set(bounce_enabled)
-            print(f"DEBUG INIT: Loaded bounce_enabled={bounce_enabled} from settings value {bounce_setting}")
+            # Load bounce chance setting - if bounce_enabled is false, use 0
+            bounce_enabled = bool(int(settings.get('bounce_enabled', 0)))
+            bounce_chance = settings.get('bounce_chance', 0.0)
+            # If bounce is disabled, set chance to 0
+            if not bounce_enabled:
+                bounce_chance = 0.0
+            self.bounce_chance.set(float(bounce_chance))
+            print(f"DEBUG INIT: Loaded bounce_chance={bounce_chance}% (enabled={bounce_enabled})")
             
-            # CRITICAL FIX: Immediately apply bounce setting to media_display
+            # Apply bounce settings to media_display
             if hasattr(root, 'media_display'):
                 root.media_display.set_bounce_enabled(bounce_enabled)
-                print(f"DEBUG INIT: Applied bounce_enabled={bounce_enabled} to media_display")
+                root.media_display.bounce_chance = float(bounce_chance) / 100.0
+                print(f"DEBUG INIT: Applied to media_display: bounce_enabled={bounce_enabled}, chance={bounce_chance}%")
         
         self._create_interval_control()
         self._create_popup_control()
         self._create_probability_control()
+        self._create_bounce_control()
         self._create_monitor_control()
         self._create_startup_control()
         self._create_buttons()
@@ -73,6 +89,9 @@ class DisplaySettingsPanel:
         self.interval_scale.bind("<ButtonRelease-1>", self._save_settings)
         self.popup_scale.bind("<ButtonRelease-1>", self._save_settings)
         self.probability_scale.bind("<ButtonRelease-1>", self._save_settings)
+        
+        # Also update bounce settings during slider movement
+        self.bounce_chance_scale.bind("<Motion>", self._update_bounce_settings)
     
     def _create_interval_control(self):
         # Interval label
@@ -86,7 +105,7 @@ class DisplaySettingsPanel:
         self.interval_scale = ttk.Scale(
             self.frame,
             from_=0.1,
-            to=300.0,  # Maximum 300 seconds
+            to=30.0,  # Maximum 30 seconds
             variable=self.interval,
             orient="horizontal",
             style='Modern.Horizontal.TScale'
@@ -159,11 +178,51 @@ class DisplaySettingsPanel:
         # Bind update event
         self.probability_scale.bind("<Motion>", self._update_labels)
     
+    def _create_bounce_control(self):
+        """Create bounce control settings"""
+        # Bounce label
+        ttk.Label(
+            self.frame,
+            text="Bounce Chance:",
+            style='Modern.TLabel'
+        ).grid(row=3, column=0, sticky=tk.W)
+        
+        # Bounce slider frame
+        bounce_frame = ttk.Frame(self.frame, style='Modern.TFrame')
+        bounce_frame.grid(row=3, column=1, sticky=(tk.W, tk.E), padx=5)
+        
+        # Bounce chance slider - now starting from 0 to disable bounce
+        self.bounce_chance_scale = ttk.Scale(
+            bounce_frame,
+            from_=0,  # Start from 0 to allow disabling
+            to=100,
+            orient=tk.HORIZONTAL,
+            variable=self.bounce_chance,
+            command=self._update_bounce_settings,
+            style='Transparent.Horizontal.TScale'
+        )
+        self.bounce_chance_scale.grid(row=0, column=0, sticky='ew')
+        
+        # Configure column weights
+        bounce_frame.columnconfigure(0, weight=1)  # Slider expands
+        
+        # Bounce chance value label - increased width to ensure % sign is visible
+        self.bounce_chance_label = ttk.Label(
+            self.frame,
+            text=f"{int(self.bounce_chance.get())}%",
+            style='Modern.TLabel',
+            width=5  # Increased width to ensure % sign is fully visible
+        )
+        self.bounce_chance_label.grid(row=3, column=2, padx=5)
+        
+        # Bind update events
+        self.bounce_chance_scale.bind("<Motion>", self._update_bounce_settings)
+    
     def _create_monitor_control(self):
-        """Create monitor selection controls and bounce control in the same line"""
+        """Create monitor selection controls"""
         # Create monitor selection frame
         monitor_frame = ttk.Frame(self.frame, style='Modern.TFrame')
-        monitor_frame.grid(row=3, column=0, columnspan=3, sticky='ew', pady=(5, 5))
+        monitor_frame.grid(row=4, column=0, columnspan=3, sticky='ew', pady=(5, 5))
         
         # Add label
         ttk.Label(
@@ -235,16 +294,6 @@ class DisplaySettingsPanel:
             print(f"DEBUG MONITOR_INIT: Created monitor checkbutton for monitor {idx} (active: {is_active})")
             logger.info(f"Created monitor checkbutton for monitor {idx} (active: {is_active})")
         
-        # Add bounce checkbox in the same row
-        self.bounce_checkbox = ttk.Checkbutton(
-            monitor_frame,
-            text="Bounce",
-            variable=self.bounce_enabled,
-            style='Modern.TCheckbutton',
-            command=self._update_bounce_enabled
-        )
-        self.bounce_checkbox.grid(row=0, column=2, sticky='e', padx=(20, 0))
-        
         # Initial update of monitor settings - force update to ensure correct monitors are set
         print("DEBUG MONITOR_INIT: Forcing initial update of monitor settings")
         self._update_monitors()
@@ -292,7 +341,7 @@ class DisplaySettingsPanel:
         """Create startup control"""
         # Startup frame
         startup_frame = ttk.Frame(self.frame, style='Modern.TFrame')
-        startup_frame.grid(row=4, column=0, columnspan=3, pady=(2, 5), sticky="nsew")  # Updated row number
+        startup_frame.grid(row=5, column=0, columnspan=3, pady=(2, 5), sticky="nsew")  # Updated row number to 5
         
         # Startup checkbox
         self.startup_var = tk.BooleanVar()
@@ -346,7 +395,7 @@ class DisplaySettingsPanel:
     def _create_buttons(self):
         # Button container
         button_frame = ttk.Frame(self.frame, style='Modern.TFrame')
-        button_frame.grid(row=5, column=0, columnspan=3, pady=(5, 2), sticky="nsew")  # Updated row number
+        button_frame.grid(row=6, column=0, columnspan=3, pady=(5, 2), sticky="nsew")  # Updated row number to 6
         
         # Start/Stop button
         self.toggle_button = ttk.Button(
@@ -360,7 +409,7 @@ class DisplaySettingsPanel:
         
         # Configure frame grid weights
         self.frame.grid_columnconfigure(1, weight=1)  # Make the scale expand
-        self.frame.grid_rowconfigure(5, weight=0)  # Don't expand vertically
+        self.frame.grid_rowconfigure(6, weight=0)  # Don't expand vertically - updated to row 6
     
     def _update_labels(self, event=None):
         """Update the value labels for interval and max popups"""
@@ -381,6 +430,12 @@ class DisplaySettingsPanel:
         self.toggle_button.configure(
             text="⏹ Stop" if is_running else "▶ Start"
         )
+        
+        # Also update the button style to reflect running state
+        if is_running:
+            logger.info("Display is running, updating button to Stop state")
+            # Ensure UI correctly shows the running state
+            self.toggle_button.configure(text="⏹ Stop")
     
     def grid(self, **kwargs):
         """Grid the frame"""
@@ -397,8 +452,12 @@ class DisplaySettingsPanel:
                 settings['popup_probability'] = int(self.probability.get())
                 
                 # CRITICAL FIX: Save bounce_enabled as integer 1/0 instead of boolean
-                bounce_enabled = self.bounce_enabled.get()
+                bounce_enabled = self.bounce_chance.get() > 0
                 settings['bounce_enabled'] = 1 if bounce_enabled else 0
+                
+                # Save bounce chance setting
+                bounce_chance = self.bounce_chance.get()
+                settings['bounce_chance'] = bounce_chance
                 
                 # Save startup setting
                 startup_enabled = self.startup_var.get()
@@ -406,6 +465,7 @@ class DisplaySettingsPanel:
                 
                 # Debug log the saved settings
                 print(f"DEBUG SETTINGS: Saving bounce_enabled={settings['bounce_enabled']} (from {bounce_enabled})")
+                print(f"DEBUG SETTINGS: Saving bounce_chance={settings['bounce_chance']}% (from {bounce_chance})")
                 print(f"DEBUG SETTINGS: Saving startup_enabled={settings['startup_enabled']} (from {startup_enabled})")
                 
                 root.media_manager.update_display_settings(settings)
@@ -413,6 +473,7 @@ class DisplaySettingsPanel:
                 # Update media display if it exists
                 if hasattr(root, 'media_display'):
                     root.media_display.set_bounce_enabled(bounce_enabled)
+                    root.media_display.bounce_chance = float(bounce_chance) / 100.0
                     print(f"DEBUG SETTINGS: Updated media_display.bounce_enabled to {root.media_display.bounce_enabled}")
                 
         except Exception as e:
@@ -420,7 +481,7 @@ class DisplaySettingsPanel:
 
     def get_bounce_enabled(self):
         """Get bounce enabled setting"""
-        return self.bounce_enabled.get()
+        return self.bounce_chance.get() > 0
 
     def get_active_monitors(self):
         """Get list of active monitor indices"""
@@ -453,31 +514,44 @@ class DisplaySettingsPanel:
             
         return active_monitors
 
-    def _update_bounce_enabled(self):
-        """Update bounce enabled setting based on checkbox"""
-        # Get the current bounce enabled state
-        enabled = bool(self.bounce_enabled.get())
-        print(f"DEBUG UI_BOUNCE: Setting bounce enabled to {enabled}")
+    def _update_bounce_settings(self, *args):
+        """Update bounce settings based on slider"""
+        # Get the current bounce chance
+        chance = float(self.bounce_chance.get())
+        
+        # Determine if bounce is enabled based on chance value
+        enabled = chance > 0
+        
+        # Update the label
+        self.bounce_chance_label.configure(text=f"{int(chance)}%")
+        
+        print(f"DEBUG UI_BOUNCE: Setting bounce enabled={enabled}, chance={chance}%")
         
         # Get the root window
         root = self.frame.winfo_toplevel()
         
         # Update the media display
         if hasattr(root, 'media_display'):
-            # Set bounce enabled using the setter method
+            # Set bounce enabled based on chance value
             root.media_display.set_bounce_enabled(enabled)
+            # Convert from percentage to decimal for internal use (0-100% -> 0.0-1.0)
+            decimal_chance = chance / 100.0
+            root.media_display.bounce_chance = decimal_chance
             
             # Verify the settings were applied
             print(f"DEBUG UI_BOUNCE: Updated media_display.bounce_enabled to {root.media_display.bounce_enabled}")
-            print(f"DEBUG UI_BOUNCE: Updated media_display.bounce_chance to {root.media_display.bounce_chance}")
+            print(f"DEBUG UI_BOUNCE: Updated media_display.bounce_chance to {root.media_display.bounce_chance} ({root.media_display.bounce_chance*100}%)")
         
-        # Save the setting to config
+        # Save the settings to config
         if hasattr(root, 'media_manager'):
             settings = root.media_manager.get_display_settings()
-            # CRITICAL FIX: Save as integer 1/0 instead of boolean
+            # Save bounce enabled as integer based on chance value
             settings['bounce_enabled'] = 1 if enabled else 0
+            # Save chance as percentage value (0-100)
+            settings['bounce_chance'] = chance
             root.media_manager.update_display_settings(settings)
             print(f"DEBUG UI_BOUNCE: Saved bounce_enabled={settings['bounce_enabled']} to settings")
+            print(f"DEBUG UI_BOUNCE: Saved bounce_chance={settings['bounce_chance']}% to settings")
         
         # Log the change
-        logger.info(f"Bounce enabled set to {enabled}")
+        logger.info(f"Bounce settings updated: enabled={enabled}, chance={chance}%")
