@@ -7,6 +7,21 @@
 
 A powerful media application that displays dynamic popups with images, videos, and animations across your screen for an immersive experience.
 
+## 📥 Installation
+
+### Windows Installer
+1. Download the latest `GoonwareSetup_vX.X.X.exe` from the releases section
+2. Run the installer and follow the on-screen instructions
+3. Choose your installation location
+4. Select optional components (like GoonConverter)
+5. Complete the installation
+6. Launch GOONWARE from the desktop shortcut or Start menu
+
+### Manual Installation
+1. Clone or download this repository
+2. Run `start.bat` to set up the virtual environment and install dependencies
+3. GOONWARE will start automatically after setup
+
 ## 🔑 Key Features
 
 ### Dynamic Popup System
@@ -41,7 +56,7 @@ A powerful media application that displays dynamic popups with images, videos, a
 ## 📋 Getting Started
 
 ### Setting Up GOONWARE
-1. Launch the application via `start.bat`
+1. Launch the application via desktop shortcut or `start.bat`
 2. Add media files to the `models` folder (ZIP or GMODEL format)
 3. Configure your display preferences in the control panel
 4. Select desired monitors for content display
@@ -97,3 +112,16 @@ A powerful media application that displays dynamic popups with images, videos, a
 - Keep video resolution below 720p for smooth performance
 - Split media packages by theme or content type
 - Use the system tray icon to quickly access controls
+
+## 🔄 Updating & Uninstalling
+
+### Updating
+1. Download the latest installer
+2. Run the installer over your existing installation
+3. Your settings and custom media files will be preserved
+
+### Uninstalling
+1. Use "Add or Remove Programs" in Windows settings
+2. Find GOONWARE and click "Uninstall"
+3. Follow the uninstallation wizard
+4. All files and registry entries will be removed
