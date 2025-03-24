@@ -1,0 +1,28 @@
+# Ignore everything in the models folder
+models/*
+
+# Except for the .gitkeep file to maintain the empty directory
+!models/.gitkeep
+
+# Ignore virtual environment
+venv/
+
+# Ignore build files
+builds/*.exe
+builds/goonware_installer_temp.iss
+
+# Ignore Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignore logs
+assets/logs/*
+!assets/logs/.gitkeep
+
+# Ignore instance lock file
+assets/instance.lock
+
+# Ignore configuration files
+assets/config.json
+assets/first_run.flag 

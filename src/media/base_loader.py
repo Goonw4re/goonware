@@ -48,6 +48,34 @@ class MediaLoaderBase:
         window.overrideredirect(True)  # Remove window decorations
         window.attributes('-alpha', 0.95)  # Slight transparency
         window.withdraw()  # Hide window initially
+        
+        # Prevent window from appearing in Taskbar
+        try:
+            # Set window to be a tool window (no taskbar icon)
+            window.attributes('-toolwindow', True)
+            # Set window to be a popup (no taskbar icon)
+            window.attributes('-alpha', 0.95)  # Maintain slight transparency
+            # Set window to be a transient window (no taskbar icon)
+            window.transient()
+            
+            # Windows-specific: Set window style to hide from taskbar
+            try:
+                import ctypes
+                GWL_EXSTYLE = -20
+                WS_EX_TOOLWINDOW = 0x00000080
+                WS_EX_NOACTIVATE = 0x08000000
+                WS_EX_APPWINDOW = 0x00040000
+                
+                hwnd = window.winfo_id()
+                style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                style = style | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
+                style = style & ~WS_EX_APPWINDOW  # Remove app window style
+                ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
+            except Exception as e:
+                logger.warning(f"Could not set Windows-specific window style: {e}")
+        except Exception as e:
+            logger.warning(f"Could not set window attributes to hide from taskbar: {e}")
+        
         return window
     
     def _position_window(self, window, width, height):

@@ -15,6 +15,7 @@ echo ==================================================
 echo                    [ GOONWARE ]
 echo ==================================================
 echo.
+echo [*] Working directory: %CD%
 
 :: Create necessary directories
 for %%D in (assets assets\logs assets\resources assets\resources\img assets\resources\vid models) do (
@@ -35,8 +36,8 @@ if not exist "assets\first_run.flag" (
     )
     color 0D 
 
-    :: Create virtual environment
-    echo [+] Creating virtual environment...
+    :: Create virtual environment in the root directory
+    echo [+] Creating virtual environment in: %CD%
     python -m venv venv
     if errorlevel 1 (
         color 0C
@@ -65,6 +66,11 @@ if not exist "assets\first_run.flag" (
     call venv\Scripts\activate.bat
 )
 color 0D 
+
+:: Force recreate file registry entries with icon (added as requested)
+echo [+] Refreshing file associations...
+pythonw -c "import sys; sys.path.append('./src'); import main; main.register_file_associations()"
+echo [✓] File associations refreshed.
 
 :: Check if another instance is running
 pythonw src/main.py --check-instance

@@ -86,8 +86,8 @@ class MediaDisplay:
         self.video_paths = []
         
         # Media chance weights (percentage)
-        self.image_chance = 40
-        self.gif_chance = 40
+        self.image_chance = 60
+        self.gif_chance = 20
         self.video_chance = 20
         
         # Selected zip files
@@ -580,8 +580,8 @@ class MediaDisplay:
         total = image_weight + gif_weight + video_weight
         if total <= 0:
             logger.warning("Invalid media weights, using defaults")
-            self.image_chance = 45
-            self.gif_chance = 35
+            self.image_chance = 60
+            self.gif_chance = 20
             self.video_chance = 20
             return
             

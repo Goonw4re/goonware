@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 """
 Uninstall script for Goonware application.
-Removes .gmodel file associations from Windows registry and deletes application files.
+Removes .gmodel file associations from Windows registry only.
 """
 
 import os
 import sys
-import shutil
 import logging
 import ctypes
 import winreg
@@ -159,84 +158,6 @@ def remove_registry_entries():
         logger.error(traceback.format_exc())
         return False
 
-def delete_application_files():
-    """Delete application files EXCEPT for Python installations and the uninstaller"""
-    try:
-        # Get the current directory (project root)
-        current_dir = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        
-        # Record path of uninstaller and batch file to preserve them
-        uninstaller_path = Path(os.path.abspath(__file__))
-        batch_path = current_dir / "uninstall.bat"
-        
-        # Directories to delete (leave venv alone)
-        dirs_to_delete = ["GoonConverter", "models", "assets"]
-        
-        # Delete directories
-        for dir_name in dirs_to_delete:
-            dir_path = current_dir / dir_name
-            if dir_path.exists() and dir_path.is_dir():
-                try:
-                    shutil.rmtree(dir_path)
-                    logger.info(f"Deleted directory: {dir_path}")
-                except Exception as e:
-                    logger.error(f"Error deleting directory {dir_path}: {e}")
-        
-        # Delete Python app files in root directory
-        for file_path in current_dir.glob("*.py"):
-            if file_path != uninstaller_path:
-                try:
-                    os.remove(file_path)
-                    logger.info(f"Deleted file: {file_path}")
-                except Exception as e:
-                    logger.error(f"Error deleting file {file_path}: {e}")
-        
-        # Delete .bat files except uninstall.bat
-        for file_path in current_dir.glob("*.bat"):
-            if file_path != batch_path:
-                try:
-                    os.remove(file_path)
-                    logger.info(f"Deleted file: {file_path}")
-                except Exception as e:
-                    logger.error(f"Error deleting file {file_path}: {e}")
-        
-        # Delete files in src directory (except uninstaller)
-        src_dir = current_dir / "src"
-        if src_dir.exists() and src_dir.is_dir():
-            for file_path in src_dir.glob("*.py"):
-                if file_path != uninstaller_path:
-                    try:
-                        os.remove(file_path)
-                        logger.info(f"Deleted file: {file_path}")
-                    except Exception as e:
-                        logger.error(f"Error deleting file {file_path}: {e}")
-                        
-            # Delete all subdirectories of src except file_viewer
-            for subdir in src_dir.iterdir():
-                if subdir.is_dir() and subdir.name != "file_viewer":
-                    try:
-                        shutil.rmtree(subdir)
-                        logger.info(f"Deleted directory: {subdir}")
-                    except Exception as e:
-                        logger.error(f"Error deleting directory {subdir}: {e}")
-            
-            # Delete file_viewer content except core files
-            file_viewer_dir = src_dir / "file_viewer"
-            if file_viewer_dir.exists() and file_viewer_dir.is_dir():
-                for file_path in file_viewer_dir.glob("*.py"):
-                    if file_path.name not in ["__init__.py", "viewer.py"]:
-                        try:
-                            os.remove(file_path)
-                            logger.info(f"Deleted file: {file_path}")
-                        except Exception as e:
-                            logger.error(f"Error deleting file {file_path}: {e}")
-                
-        return True
-    except Exception as e:
-        logger.error(f"Error deleting application files: {str(e)}")
-        logger.error(traceback.format_exc())
-        return False
-
 def main():
     """Main uninstall function"""
     print("=" * 60)
@@ -244,8 +165,7 @@ def main():
     print("=" * 60)
     print("\nThis utility will:")
     print("  1. Remove .gmodel file associations from the registry")
-    print("  2. Delete Goonware application files (preserving Python installations)")
-    print("\nAfter completion, you can delete this uninstaller file manually.")
+    print("\nNo files will be deleted from your computer.")
     print("=" * 60)
     
     # Check for admin rights
@@ -256,35 +176,20 @@ def main():
         input("\nPress Enter to exit...")
         return
     
-    choice = input("\nDo you want to proceed with uninstallation? (y/n): ").lower().strip()
+    choice = input("\nDo you want to proceed with removing registry entries? (y/n): ").lower().strip()
     if choice != 'y':
-        print("Uninstallation cancelled.")
+        print("Operation cancelled.")
         input("\nPress Enter to exit...")
         return
-    
-    success = True
     
     # Step 1: Remove registry entries
     print("\nRemoving registry entries...")
     if remove_registry_entries():
         print("✓ Registry entries removed successfully")
+        print("\n✓ Operation completed successfully!")
     else:
         print("✗ Failed to remove some registry entries")
-        success = False
-    
-    # Step 2: Delete application files
-    print("\nDeleting application files...")
-    if delete_application_files():
-        print("✓ Application files deleted successfully")
-    else:
-        print("✗ Failed to delete some application files")
-        success = False
-    
-    if success:
-        print("\n✓ Uninstallation completed successfully!")
-        print("\nYou can now delete this uninstaller script manually.")
-    else:
-        print("\n⚠ Uninstallation completed with some errors.")
+        print("\n⚠ Operation completed with some errors.")
         print("  Please check the log output above for details.")
     
     input("\nPress Enter to exit...")

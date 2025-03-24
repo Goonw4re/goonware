@@ -34,7 +34,7 @@ class ControlPanel:
             
             # Remove window decorations and set fixed size
             root.overrideredirect(True)
-            root.geometry("397x635")  # Reduced height to match more compact panic key panel
+            root.geometry("397x705")  # Reduced height to match more compact panic key panel
             root.resizable(False, False)  # Prevent resizing
             
             # Initialize variables

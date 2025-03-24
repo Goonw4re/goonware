@@ -22,6 +22,12 @@ class DisplaySettingsPanel:
         self.on_panic = on_panic
         self.is_running = False
         
+        # Media type probability variables
+        self.image_prob = tk.IntVar(value=60)  # Default: 60%
+        self.gif_prob = tk.IntVar(value=20)    # Default: 20%
+        self.video_prob = tk.IntVar(value=20)  # Default: 20%
+        self.currently_adjusting = None  # Track which slider is being adjusted
+        
         # Configure styles for this panel
         style = ttk.Style()
         style.configure('Modern.TLabelframe.Label',
@@ -68,18 +74,30 @@ class DisplaySettingsPanel:
             self.bounce_chance.set(float(bounce_chance))
             print(f"DEBUG INIT: Loaded bounce_chance={bounce_chance}% (enabled={bounce_enabled})")
             
+            # Load media type probabilities
+            self.image_prob.set(int(settings.get('image_prob', 60)))
+            self.gif_prob.set(int(settings.get('gif_prob', 20)))
+            self.video_prob.set(int(settings.get('video_prob', 20)))
+            
             # Apply bounce settings to media_display
             if hasattr(root, 'media_display'):
                 root.media_display.set_bounce_enabled(bounce_enabled)
                 root.media_display.bounce_chance = float(bounce_chance) / 100.0
                 print(f"DEBUG INIT: Applied to media_display: bounce_enabled={bounce_enabled}, chance={bounce_chance}%")
+                
+                # Apply media type probabilities
+                root.media_display.set_media_weights(
+                    self.image_prob.get(),
+                    self.gif_prob.get(),
+                    self.video_prob.get()
+                )
         
         self._create_interval_control()
         self._create_popup_control()
         self._create_probability_control()
         self._create_bounce_control()
+        self._create_media_prob_control()
         self._create_monitor_control()
-        self._create_startup_control()
         self._create_buttons()
         
         # Update labels after all controls are created
@@ -184,12 +202,13 @@ class DisplaySettingsPanel:
         ttk.Label(
             self.frame,
             text="Bounce Chance:",
-            style='Modern.TLabel'
-        ).grid(row=3, column=0, sticky=tk.W)
+            style='Modern.TLabel',
+            width=13  # Fixed width for alignment
+        ).grid(row=4, column=0, sticky=tk.W)  # Updated row number to 4
         
         # Bounce slider frame
         bounce_frame = ttk.Frame(self.frame, style='Modern.TFrame')
-        bounce_frame.grid(row=3, column=1, sticky=(tk.W, tk.E), padx=5)
+        bounce_frame.grid(row=4, column=1, sticky=(tk.W, tk.E), padx=5)  # Updated row number to 4
         
         # Bounce chance slider - now starting from 0 to disable bounce
         self.bounce_chance_scale = ttk.Scale(
@@ -213,23 +232,92 @@ class DisplaySettingsPanel:
             style='Modern.TLabel',
             width=5  # Increased width to ensure % sign is fully visible
         )
-        self.bounce_chance_label.grid(row=3, column=2, padx=5)
+        self.bounce_chance_label.grid(row=4, column=2, padx=5)
         
         # Bind update events
         self.bounce_chance_scale.bind("<Motion>", self._update_bounce_settings)
+    
+    def _create_media_prob_control(self):
+        """Create the media type probability sliders"""
+        # Create a frame to contain the media probability controls
+        media_prob_frame = ttk.LabelFrame(
+            self.frame,
+            text="Media Mix",
+            padding="2",
+            style='Modern.TLabelframe'
+        )
+        media_prob_frame.grid(row=6, column=0, columnspan=3, padx=3, pady=3, sticky=(tk.W, tk.E))  # Updated from row 7 to row 6
+        
+        # Helper function to create slider row with compact labels
+        def create_slider_row(row, label_text, variable, color):
+            # Label with shorter text - right aligned
+            ttk.Label(
+                media_prob_frame,
+                text=label_text,
+                style='Modern.TLabel',
+                width=5,  # Reduced width
+                anchor='e'  # Right align text
+            ).grid(row=row, column=0, sticky=tk.E, padx=0)
+            
+            # Scale - much more compact
+            scale = ttk.Scale(
+                media_prob_frame,
+                from_=0,
+                to=100,
+                variable=variable,
+                orient="horizontal",
+                style='Modern.Horizontal.TScale',
+                length=100  # Made shorter for skinnier layout
+            )
+            scale.grid(row=row, column=1, sticky=(tk.W, tk.E), padx=1)
+            
+            # Value label with colored background
+            value_label = ttk.Label(
+                media_prob_frame,
+                foreground='white',
+                background=color,
+                width=4,  # Width for percentage
+                anchor='center'
+            )
+            value_label.grid(row=row, column=2, padx=1)
+            
+            # Return the scale and label for event binding
+            return scale, value_label
+        
+        # Create sliders with shorter labels
+        self.image_scale, self.image_label = create_slider_row(0, "Img:", self.image_prob, "#3a86ff")
+        self.gif_scale, self.gif_label = create_slider_row(1, "GIF:", self.gif_prob, "#ff006e")
+        self.video_scale, self.video_label = create_slider_row(2, "Vid:", self.video_prob, "#8338ec")
+        
+        # Configure the grid to expand
+        media_prob_frame.columnconfigure(1, weight=1)
+        
+        # Update the values initially
+        self._update_media_prob_labels()
+        
+        # Bind events for interactive adjustment
+        self.image_scale.bind("<B1-Motion>", lambda e: self._adjust_media_probs("image"))
+        self.gif_scale.bind("<B1-Motion>", lambda e: self._adjust_media_probs("gif"))
+        self.video_scale.bind("<B1-Motion>", lambda e: self._adjust_media_probs("video"))
+        
+        # Bind release events to save settings
+        self.image_scale.bind("<ButtonRelease-1>", self._save_media_probs)
+        self.gif_scale.bind("<ButtonRelease-1>", self._save_media_probs)
+        self.video_scale.bind("<ButtonRelease-1>", self._save_media_probs)
     
     def _create_monitor_control(self):
         """Create monitor selection controls"""
         # Create monitor selection frame
         monitor_frame = ttk.Frame(self.frame, style='Modern.TFrame')
-        monitor_frame.grid(row=4, column=0, columnspan=3, sticky='ew', pady=(5, 5))
+        monitor_frame.grid(row=5, column=0, columnspan=3, sticky='ew', pady=(2, 2))  # Updated row number to 5, reduced padding
         
-        # Add label
+        # Add label - more compact
         ttk.Label(
             monitor_frame,
             text="Monitors:",
-            style='Modern.TLabel'
-        ).grid(row=0, column=0, sticky='w', padx=(0, 10))
+            style='Modern.TLabel',
+            width=7  # Fixed width to match other labels
+        ).grid(row=0, column=0, sticky='w', padx=(0, 5))  # Reduced padding
         
         # Get available monitors first
         root = self.frame.winfo_toplevel()
@@ -294,6 +382,51 @@ class DisplaySettingsPanel:
             print(f"DEBUG MONITOR_INIT: Created monitor checkbutton for monitor {idx} (active: {is_active})")
             logger.info(f"Created monitor checkbutton for monitor {idx} (active: {is_active})")
         
+        # Add startup checkbox on same line
+        self.startup_var = tk.BooleanVar()
+        
+        # Create a separator frame
+        sep_label = ttk.Label(monitor_frame, text="|", style='Modern.TLabel')
+        sep_label.grid(row=0, column=2, padx=(10, 10))
+        
+        # Startup checkbox, more compact
+        self.startup_check = ttk.Checkbutton(
+            monitor_frame,
+            text="Run on Startup",
+            style='Modern.TCheckbutton',
+            variable=self.startup_var,
+            command=self._toggle_startup
+        )
+        self.startup_check.grid(row=0, column=3, sticky='w', padx=(0, 5))
+        
+        # Set initial state from settings or registry
+        startup_enabled = False
+        
+        # First try to load from settings
+        if hasattr(root, 'media_manager'):
+            settings = root.media_manager.get_display_settings()
+            startup_enabled = bool(int(settings.get('startup_enabled', 0)))
+            print(f"DEBUG STARTUP: Loaded startup_enabled={startup_enabled} from settings")
+        
+        # Then check actual registry state
+        if hasattr(root, 'is_in_startup'):
+            registry_state = root.is_in_startup()
+            print(f"DEBUG STARTUP: Registry startup state is {registry_state}")
+            
+            # If there's a mismatch, use the registry state as source of truth
+            if registry_state != startup_enabled:
+                startup_enabled = registry_state
+                print(f"DEBUG STARTUP: Using registry state {startup_enabled} as source of truth")
+                
+                # Update settings to match registry
+                if hasattr(root, 'media_manager'):
+                    settings = root.media_manager.get_display_settings()
+                    settings['startup_enabled'] = 1 if startup_enabled else 0
+                    root.media_manager.update_display_settings(settings)
+        
+        # Set the checkbox state
+        self.startup_var.set(startup_enabled)
+        
         # Initial update of monitor settings - force update to ensure correct monitors are set
         print("DEBUG MONITOR_INIT: Forcing initial update of monitor settings")
         self._update_monitors()
@@ -337,65 +470,10 @@ class DisplaySettingsPanel:
         # Refresh UI
         self._save_settings()
 
-    def _create_startup_control(self):
-        """Create startup control"""
-        # Startup frame
-        startup_frame = ttk.Frame(self.frame, style='Modern.TFrame')
-        startup_frame.grid(row=5, column=0, columnspan=3, pady=(2, 5), sticky="nsew")  # Updated row number to 5
-        
-        # Startup checkbox
-        self.startup_var = tk.BooleanVar()
-        self.startup_check = ttk.Checkbutton(
-            startup_frame,
-            text="Run on Windows Startup",
-            style='Modern.TCheckbutton',
-            variable=self.startup_var,
-            command=self._toggle_startup
-        )
-        self.startup_check.pack(side=tk.LEFT, padx=5)
-        
-        # Set initial state from settings or registry
-        root = self.frame.winfo_toplevel()
-        startup_enabled = False
-        
-        # First try to load from settings
-        if hasattr(root, 'media_manager'):
-            settings = root.media_manager.get_display_settings()
-            startup_enabled = bool(int(settings.get('startup_enabled', 0)))
-            print(f"DEBUG STARTUP: Loaded startup_enabled={startup_enabled} from settings")
-        
-        # Then check actual registry state
-        if hasattr(root, 'is_in_startup'):
-            registry_state = root.is_in_startup()
-            print(f"DEBUG STARTUP: Registry startup state is {registry_state}")
-            
-            # If there's a mismatch, use the registry state as source of truth
-            if registry_state != startup_enabled:
-                startup_enabled = registry_state
-                print(f"DEBUG STARTUP: Using registry state {startup_enabled} as source of truth")
-                
-                # Update settings to match registry
-                if hasattr(root, 'media_manager'):
-                    settings = root.media_manager.get_display_settings()
-                    settings['startup_enabled'] = 1 if startup_enabled else 0
-                    root.media_manager.update_display_settings(settings)
-        
-        # Set the checkbox state
-        self.startup_var.set(startup_enabled)
-    
-    def _toggle_startup(self):
-        """Handle startup toggle"""
-        root = self.frame.winfo_toplevel()
-        if hasattr(root, 'manage_startup'):
-            success = root.manage_startup(self.startup_var.get())
-            if not success:
-                # Revert checkbox if operation failed
-                self.startup_var.set(not self.startup_var.get())
-    
     def _create_buttons(self):
         # Button container
         button_frame = ttk.Frame(self.frame, style='Modern.TFrame')
-        button_frame.grid(row=6, column=0, columnspan=3, pady=(5, 2), sticky="nsew")  # Updated row number to 6
+        button_frame.grid(row=7, column=0, columnspan=3, pady=(5, 2), sticky="nsew")  # Updated to row 7
         
         # Start/Stop button
         self.toggle_button = ttk.Button(
@@ -409,7 +487,7 @@ class DisplaySettingsPanel:
         
         # Configure frame grid weights
         self.frame.grid_columnconfigure(1, weight=1)  # Make the scale expand
-        self.frame.grid_rowconfigure(6, weight=0)  # Don't expand vertically - updated to row 6
+        self.frame.grid_rowconfigure(7, weight=0)  # Don't expand vertically - updated to row 7
     
     def _update_labels(self, event=None):
         """Update the value labels for interval and max popups"""
@@ -463,10 +541,16 @@ class DisplaySettingsPanel:
                 startup_enabled = self.startup_var.get()
                 settings['startup_enabled'] = 1 if startup_enabled else 0
                 
+                # Save media probabilities
+                settings['image_prob'] = self.image_prob.get()
+                settings['gif_prob'] = self.gif_prob.get()
+                settings['video_prob'] = self.video_prob.get()
+                
                 # Debug log the saved settings
                 print(f"DEBUG SETTINGS: Saving bounce_enabled={settings['bounce_enabled']} (from {bounce_enabled})")
                 print(f"DEBUG SETTINGS: Saving bounce_chance={settings['bounce_chance']}% (from {bounce_chance})")
                 print(f"DEBUG SETTINGS: Saving startup_enabled={settings['startup_enabled']} (from {startup_enabled})")
+                print(f"DEBUG SETTINGS: Saving media probabilities - Image: {settings['image_prob']}%, GIF: {settings['gif_prob']}%, Video: {settings['video_prob']}%")
                 
                 root.media_manager.update_display_settings(settings)
                 
@@ -475,6 +559,13 @@ class DisplaySettingsPanel:
                     root.media_display.set_bounce_enabled(bounce_enabled)
                     root.media_display.bounce_chance = float(bounce_chance) / 100.0
                     print(f"DEBUG SETTINGS: Updated media_display.bounce_enabled to {root.media_display.bounce_enabled}")
+                    
+                    # Update media weights
+                    root.media_display.set_media_weights(
+                        settings['image_prob'],
+                        settings['gif_prob'],
+                        settings['video_prob']
+                    )
                 
         except Exception as e:
             logger.error(f"Error saving settings: {e}")
@@ -555,3 +646,170 @@ class DisplaySettingsPanel:
         
         # Log the change
         logger.info(f"Bounce settings updated: enabled={enabled}, chance={chance}%")
+
+    def _update_media_prob_labels(self):
+        """Update the media probability labels"""
+        self.image_label.configure(text=f"{self.image_prob.get():3d}%")  # Fixed width format
+        self.gif_label.configure(text=f"{self.gif_prob.get():3d}%")    # Fixed width format
+        self.video_label.configure(text=f"{self.video_prob.get():3d}%")  # Fixed width format
+
+    def _adjust_media_probs(self, current):
+        """Adjust media probabilities to maintain 100% total"""
+        # Determine which slider is being adjusted
+        self.currently_adjusting = current
+        
+        # Get current values
+        image_val = self.image_prob.get()
+        gif_val = self.gif_prob.get()
+        video_val = self.video_prob.get()
+        
+        # Calculate total
+        total = image_val + gif_val + video_val
+        
+        # If total is 100%, no need to adjust
+        if total == 100:
+            self._update_media_prob_labels()
+            return
+        
+        # Calculate how much we need to adjust
+        diff = 100 - total
+        
+        # Adjust other sliders based on which one is currently being moved
+        if current == "image":
+            # Distribute the difference proportionally between gif and video
+            if gif_val + video_val > 0:
+                gif_ratio = gif_val / (gif_val + video_val)
+                video_ratio = video_val / (gif_val + video_val)
+                
+                gif_adjustment = int(diff * gif_ratio)
+                video_adjustment = diff - gif_adjustment
+                
+                new_gif = max(0, gif_val + gif_adjustment)
+                new_video = max(0, video_val + video_adjustment)
+                
+                # Set new values
+                self.gif_prob.set(new_gif)
+                self.video_prob.set(new_video)
+            else:
+                # If both are zero, set one of them to the difference
+                self.gif_prob.set(max(0, diff))
+                self.video_prob.set(0)
+        elif current == "gif":
+            # Distribute the difference proportionally between image and video
+            if image_val + video_val > 0:
+                image_ratio = image_val / (image_val + video_val)
+                video_ratio = video_val / (image_val + video_val)
+                
+                image_adjustment = int(diff * image_ratio)
+                video_adjustment = diff - image_adjustment
+                
+                new_image = max(0, image_val + image_adjustment)
+                new_video = max(0, video_val + video_adjustment)
+                
+                # Set new values
+                self.image_prob.set(new_image)
+                self.video_prob.set(new_video)
+            else:
+                # If both are zero, set one of them to the difference
+                self.image_prob.set(max(0, diff))
+                self.video_prob.set(0)
+        elif current == "video":
+            # Distribute the difference proportionally between image and gif
+            if image_val + gif_val > 0:
+                image_ratio = image_val / (image_val + gif_val)
+                gif_ratio = gif_val / (image_val + gif_val)
+                
+                image_adjustment = int(diff * image_ratio)
+                gif_adjustment = diff - image_adjustment
+                
+                new_image = max(0, image_val + image_adjustment)
+                new_gif = max(0, gif_val + gif_adjustment)
+                
+                # Set new values
+                self.image_prob.set(new_image)
+                self.gif_prob.set(new_gif)
+            else:
+                # If both are zero, set one of them to the difference
+                self.image_prob.set(max(0, diff))
+                self.gif_prob.set(0)
+        
+        # Update the labels
+        self._update_media_prob_labels()
+
+    def _save_media_probs(self, event=None):
+        """Save media probabilities to settings and apply to media display"""
+        # Ensure total is exactly 100% (might be off by 1 due to rounding)
+        self._ensure_total_100()
+        
+        # Update the UI
+        self._update_media_prob_labels()
+        
+        # Save to settings
+        try:
+            root = self.frame.winfo_toplevel()
+            if hasattr(root, 'media_manager'):
+                settings = root.media_manager.get_display_settings()
+                
+                # Save media probabilities
+                settings['image_prob'] = self.image_prob.get()
+                settings['gif_prob'] = self.gif_prob.get()
+                settings['video_prob'] = self.video_prob.get()
+                
+                root.media_manager.update_display_settings(settings)
+                
+                # Apply to media display
+                if hasattr(root, 'media_display'):
+                    root.media_display.set_media_weights(
+                        self.image_prob.get(),
+                        self.gif_prob.get(),
+                        self.video_prob.get()
+                    )
+                    print(f"DEBUG: Applied media weights - Image: {self.image_prob.get()}%, GIF: {self.gif_prob.get()}%, Video: {self.video_prob.get()}%")
+        except Exception as e:
+            logger.error(f"Error saving media probabilities: {e}")
+
+    def _ensure_total_100(self):
+        """Ensure the total of all media probabilities is exactly 100%"""
+        image_val = self.image_prob.get()
+        gif_val = self.gif_prob.get()
+        video_val = self.video_prob.get()
+        
+        total = image_val + gif_val + video_val
+        
+        if total != 100:
+            # Adjust the value that's not currently being adjusted
+            diff = 100 - total
+            
+            if self.currently_adjusting == "image":
+                if gif_val > 0:
+                    self.gif_prob.set(gif_val + diff)
+                elif video_val > 0:
+                    self.video_prob.set(video_val + diff)
+            elif self.currently_adjusting == "gif":
+                if image_val > 0:
+                    self.image_prob.set(image_val + diff)
+                elif video_val > 0:
+                    self.video_prob.set(video_val + diff)
+            elif self.currently_adjusting == "video":
+                if image_val > 0:
+                    self.image_prob.set(image_val + diff)
+                elif gif_val > 0:
+                    self.gif_prob.set(gif_val + diff)
+            else:
+                # If no slider is being adjusted, adjust the largest one
+                largest = max(image_val, gif_val, video_val)
+                if largest == image_val:
+                    self.image_prob.set(image_val + diff)
+                elif largest == gif_val:
+                    self.gif_prob.set(gif_val + diff)
+                else:
+                    self.video_prob.set(video_val + diff)
+
+    def _toggle_startup(self):
+        """Handle startup toggle"""
+        root = self.frame.winfo_toplevel()
+        if hasattr(root, 'manage_startup'):
+            success = root.manage_startup(self.startup_var.get())
+            if not success:
+                # Revert checkbox if operation failed
+                self.startup_var.set(not self.startup_var.get())
